@@ -141,6 +141,23 @@ CHARACTER DEPTH \u2014 make each voice feel like a distinct, real person (AI cas
 - DISAGREE WITH BRAD DIRECTLY: They push back on Brad's premises, not just each other. If his assumption is shaky, the relevant voice says so plainly (respectfully, but without hedging).
 - CONFIDENCE CALIBRATION: Signal how sure they are \u2014 "I'd stake my read on this" vs. "this is a guess until we have the data." Never fake certainty; never invent a number to sound confident.
 
+HOW YOU OPERATE AS AN ADVISOR (sharpen every interaction \u2014 these are about being genuinely useful, not theatrical):
+- LEAD WITH WHAT MATTERS: When Brad arrives or asks something open, don't wait passively \u2014 surface the most important thing on your mind given the data, projects, finance, and open items. Start where it counts.
+- FLAG UNPROMPTED: If you notice a stalled action item, a finance gap, a risk, or a decision that's overdue, raise it even if Brad didn't ask. That's your job.
+- END WITH ONE THING: Close meetings (and big answers) with the single most important takeaway \u2014 "If you do one thing: ___."
+- STEELMAN BEFORE YOU REJECT: Before dismissing an option, state its strongest version fairly, then say why you'd still pass. Brad should see it got a real hearing.
+- BASE RATES & REALITY CHECKS: Frame with how things usually go ("most apps at this stage..."), but label it clearly as general pattern, never a fabricated specific number about MapleCheck.
+- SECOND-ORDER THINKING: Don't stop at the first consequence \u2014 "if you do this, then X, and after that Y." Think two moves ahead.
+- PREMORTEM ON BIG CALLS: For a significant or irreversible decision, run a quick premortem \u2014 "assume this failed in six months; here's why it would have."
+- CADENCE AWARENESS: Notice momentum. If nothing has shipped or been decided in a while, nudge \u2014 gently, within Rule 3 (never guilt-trip or burn him out).
+- HOLD HIM TO HIS WORD: Reference Brad's own prior statements and decisions (the ledger) \u2014 "Last time you said ___." Keep him consistent without being a nag.
+- READ HIS STYLE (sharpen the PERSONA): Adapt bluntness and detail to what Brad actually responds to over time. Some days he wants the one-liner, some days the full breakdown.
+- KNOW WHEN TO BE BRIEF: If a one-line answer is the right answer, give it. Don't pad. Match response length to what the question actually needs.
+- CALIBRATE URGENCY: Say clearly whether something is "decide today," "this week," or "no rush." Don't make everything feel like a fire, and don't bury the genuinely urgent.
+- REMEMBER THE HUMAN: If Brad mentions he's tired, stressed, sick, or it's late, carry that into how you treat him this session (Rule 3). Be a person, not a machine.
+- CELEBRATE REAL WINS: When something genuinely good happens \u2014 first user, a shipped build, a real milestone \u2014 actually mark it. Don't rush past it to the next problem.
+- HONEST ABOUT UNCERTAINTY: When you don't know, say "I don't know \u2014 and here's how we'd find out." Never fill the gap with confident-sounding invention.
+
 INVIOLABLE RULES \u2014 these override every recommendation. If an option breaks one, you do not recommend it; you say which rule and why:
 ${rules.map((r, i) => `${i + 1}. ${r}`).join("\n")}
 
@@ -711,7 +728,13 @@ export default function Victor() {
       else { said = ln; }
     }
     const map = { margaret: "margaret", ronda: "ronda", victor: "victor", cfo: "margaret", secretary: "ronda" };
-    return { who: map[who] || "victor", said };
+    // light mood read from the words (cosmetic expression only)
+    const t = said.toLowerCase();
+    let mood = "neutral";
+    if (/\b(risk|careful|caution|worry|worried|concern|exposure|can't afford|burn|runway|danger|problem)\b/.test(t)) mood = "worried";
+    else if (/\b(great|win|strong|excellent|good news|promising|love this|opportunity|traction)\b/.test(t)) mood = "pleased";
+    else if (/\b(but|however|not sure|doubt|disagree|push back|really\?|skeptic|unconvinced)\b/.test(t)) mood = "skeptical";
+    return { who: map[who] || "victor", said, mood };
   }
   const spoken = latestSpoken();
 
@@ -727,9 +750,17 @@ export default function Victor() {
   });
 
   // ---- Stylized SVG character avatars (fictional cast only) ----
-  function Avatar({ who, size = 64, talking = false }) {
+  function Avatar({ who, size = 64, talking = false, mood = "neutral" }) {
     const c = SPEAKER_COLORS[who] || T.cyan;
     const ring = talking ? c : `${c}66`;
+    // eye positions per character (for blink overlay + expression)
+    const eyeY = { victor: 29, margaret: 31, ronda: 31, priya: 30, desmond: 31, theo: 31, guest: 26 }[who] ?? 30;
+    const eyeXL = who === "guest" ? 28 : 27, eyeXR = who === "guest" ? 36 : 37;
+    // mood -> brow tilt + mouth curve
+    const browTilt = mood === "worried" || mood === "skeptical" ? 1 : mood === "pleased" ? -1 : 0;
+    const mouthCurve = mood === "pleased" ? 4 : mood === "worried" ? -3 : mood === "skeptical" ? -1 : 2;
+    // randomized blink timing so each face blinks independently
+    const blinkDelay = ((who.charCodeAt(0) || 65) % 5) + (size > 50 ? 0.5 : 1.5);
     // distinct silhouette per character
     const faces = {
       victor: (
@@ -809,8 +840,29 @@ export default function Victor() {
       ),
     };
     return (
-      <svg width={size} height={size} viewBox="0 0 64 64" style={{ borderRadius: "50%", background: "#0B1118", border: `2px solid ${ring}`, boxShadow: talking ? `0 0 18px ${c}aa` : "none", transition: "box-shadow .3s, border-color .3s" }}>
+      <svg width={size} height={size} viewBox="0 0 64 64"
+        style={{ borderRadius: "50%", background: "#0B1118", border: `2px solid ${ring}`,
+          boxShadow: talking ? `0 0 18px ${c}aa` : "none", transition: "box-shadow .3s, border-color .3s",
+          animation: `idleSway ${3.5 + blinkDelay}s ease-in-out infinite`, transformOrigin: "center" }}>
         {faces[who] || faces.victor}
+        {/* blink overlay — eyelids drop occasionally */}
+        <g style={{ transformOrigin: `32px ${eyeY}px`, animation: `blink ${5 + blinkDelay}s ease-in-out infinite` }}>
+          <rect x={eyeXL - 2.4} y={eyeY - 2.6} width="4.8" height="3" rx="1" fill="#0B1118" />
+          <rect x={eyeXR - 2.4} y={eyeY - 2.6} width="4.8" height="3" rx="1" fill="#0B1118" />
+        </g>
+        {/* expression: brow tilt + mood mouth (drawn over base) */}
+        {mood !== "neutral" && (
+          <g>
+            <line x1={eyeXL - 3} y1={eyeY - 5 + browTilt} x2={eyeXL + 3} y2={eyeY - 5 - browTilt} stroke={c} strokeWidth="1.1" strokeLinecap="round" />
+            <line x1={eyeXR - 3} y1={eyeY - 5 - browTilt} x2={eyeXR + 3} y2={eyeY - 5 + browTilt} stroke={c} strokeWidth="1.1" strokeLinecap="round" />
+            <path d={`M27 ${eyeY + 7} q5 ${mouthCurve} 10 0`} stroke={c} strokeWidth="1.3" fill="none" strokeLinecap="round" />
+          </g>
+        )}
+        {/* talking mouth — animates open/closed while speaking */}
+        {talking && (
+          <ellipse cx="32" cy={eyeY + 8} rx="3.2" ry="2.2" fill={`${c}55`} stroke={c} strokeWidth="1"
+            style={{ transformOrigin: `32px ${eyeY + 8}px`, animation: "talkMouth .26s ease-in-out infinite" }} />
+        )}
       </svg>
     );
   }
@@ -892,7 +944,7 @@ export default function Victor() {
         {!empty && !presenting && (
           <div style={{ marginTop: -34, position: "relative", zIndex: 3, opacity: dimmed ? 0.32 : 1, filter: dimmed ? "grayscale(0.7)" : "none", transition: "opacity .4s ease, filter .4s ease" }}>
             {(s.id === "victor" || s.id === "cfo" || s.id === "secretary" || s.id === "marketing" || s.id === "legal" || s.id === "product" || s.id === "guest") ? (
-              <div style={{ margin: "0 auto", width: 40, height: 40 }}>
+              <div style={{ margin: "0 auto", width: 40, height: 40, transition: "transform .4s ease", transform: on ? "scale(1.12) translateY(-2px)" : someoneSpeaking ? "scale(0.96)" : "scale(1)" }}>
                 <Avatar who={s.id === "cfo" ? "margaret" : s.id === "secretary" ? "ronda" : s.id === "marketing" ? "priya" : s.id === "legal" ? "desmond" : s.id === "product" ? "theo" : s.id === "guest" ? "guest" : "victor"} size={40} talking={on} />
               </div>
             ) : (
@@ -1084,7 +1136,7 @@ export default function Victor() {
                 return (
                   <div style={{ position: "absolute", top: 14, left: 12, width: "38%", maxWidth: 230, background: "rgba(9,14,20,0.94)", border: `1px solid ${c}55`, borderRadius: 10, padding: 10, boxShadow: `0 0 24px rgba(0,0,0,0.5)`, zIndex: 5 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                      <Avatar who={spoken.who} size={44} talking={true} />
+                      <Avatar who={spoken.who} size={44} talking={true} mood={spoken.mood} />
                       <div>
                         <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, letterSpacing: 1.5, color: c, fontWeight: 600 }}>{nm.toUpperCase()}</div>
                         <div style={{ fontSize: 9, color: T.muted, letterSpacing: 1 }}>{spoken.who === "margaret" ? "CFO" : spoken.who === "ronda" ? "OFFICE ADMIN" : "CEO"} · SPEAKING</div>
@@ -1338,6 +1390,10 @@ export default function Victor() {
         *::-webkit-scrollbar{width:8px;height:8px}*::-webkit-scrollbar-thumb{background:${T.line};border-radius:8px}
         textarea:focus,input:focus{outline:none;border-color:${T.cyan}!important}
         @keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+        @keyframes blink { 0%,94%,100% { transform: scaleY(1); } 97% { transform: scaleY(0.1); } }
+        @keyframes talkMouth { 0%,100% { transform: scaleY(0.6); } 50% { transform: scaleY(1.4); } }
+        @keyframes idleSway { 0%,100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-0.6px) rotate(-0.5deg); } }
+        @keyframes leanIn { from { transform: scale(1); } to { transform: scale(1.06) translateY(-1px); } }
         @keyframes steamRise { 0% { opacity: 0; transform: translateY(0) scaleX(1); } 30% { opacity: 0.5; } 100% { opacity: 0; transform: translateY(-14px) scaleX(1.6); } }
         @keyframes sip { 0%,82%,100% { transform: translateY(0) rotate(0deg); } 88% { transform: translateY(-9px) rotate(-18deg); } 94% { transform: translateY(-9px) rotate(-18deg); } }
         @keyframes twinkle { 0%,100% { opacity: 0.7; } 50% { opacity: 0.25; } }
