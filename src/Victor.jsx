@@ -237,6 +237,7 @@ export default function Victor() {
   const [slides, setSlides] = useState([]);     // [{title, points[]}]
   const [slideIdx, setSlideIdx] = useState(0);
   const [pointIdx, setPointIdx] = useState(1);   // how many points revealed on current slide
+  const [autoPlay, setAutoPlay] = useState(false);
   const [vote, setVote] = useState(null);  // {question, victor:{choice,reason}, brad:choice|null, jonathan:'pending'|choice}
   // --- Room state (Milestone 2: shared live meeting) ---
   const [myName, setMyName] = useState(() => localStorage.getItem('victor_name') || '');
@@ -516,9 +517,28 @@ export default function Victor() {
     if (pointIdx > 1) { const np=pointIdx-1; setPointIdx(np); roomUpdate({pointIdx:np}); return; }
     if (slideIdx > 0) { const ns = slideIdx - 1; const np=slides[ns].points.length; setSlideIdx(ns); setPointIdx(np); roomUpdate({slideIdx:ns,pointIdx:np}); }
   }
-  function deckClose() { setSlides([]); setDeckTitle(""); setSlideIdx(0); setPointIdx(1); }
+  function deckClose() { setSlides([]); setDeckTitle(""); setSlideIdx(0); setPointIdx(1); setAutoPlay(false); }
   const atEnd = curSlide && slideIdx === slides.length - 1 && pointIdx >= curSlide.points.length;
   const atStart = slideIdx === 0 && pointIdx <= 1;
+
+  // Auto-advance: when playing, step the deck forward on a timer.
+  // deckNext reveals the next list point, then moves to the next slide — so lists
+  // auto-reveal line by line, then it auto-moves to the next slide.
+  useEffect(() => {
+    if (!autoPlay || slides.length === 0) return;
+    if (atEnd) { setAutoPlay(false); return; }
+    const onLastPointOfSlide = curSlide && pointIdx >= curSlide.points.length;
+    // Linger a bit longer when about to switch slides; quicker between list points.
+    const delay = onLastPointOfSlide ? 3200 : 2000;
+    const t = setTimeout(() => { deckNext(); }, delay);
+    return () => clearTimeout(t);
+  }, [autoPlay, slideIdx, pointIdx, slides.length, atEnd]);
+
+  // When a fresh deck arrives, start it playing automatically.
+  useEffect(() => {
+    if (slides.length > 0) { setSlideIdx(0); setPointIdx(1); setAutoPlay(true); }
+    // eslint-disable-next-line
+  }, [slides.length > 0 ? deckTitle : null]);
 
   const curMode = mode === "auto"
     ? (MODES[[...messages].reverse().find(m => m.mode)?.mode] || MODES.A)
@@ -730,6 +750,10 @@ export default function Victor() {
                       style={{ background: "transparent", border: `1px solid ${atStart ? T.line : T.cyan}`, color: atStart ? T.muted : T.cyan, borderRadius: 6, padding: "3px 10px", fontSize: 11, fontFamily: "'JetBrains Mono',monospace", cursor: atStart ? "default" : "pointer" }}>‹ BACK</button>
                     <button onClick={deckNext} disabled={atEnd}
                       style={{ background: atEnd ? "transparent" : `${T.cyan}1A`, border: `1px solid ${atEnd ? T.line : T.cyan}`, color: atEnd ? T.muted : T.cyan, borderRadius: 6, padding: "3px 10px", fontSize: 11, fontFamily: "'JetBrains Mono',monospace", cursor: atEnd ? "default" : "pointer" }}>NEXT ›</button>
+                    <button onClick={() => { if (atEnd) { setSlideIdx(0); setPointIdx(1); roomUpdate({slideIdx:0,pointIdx:1}); setAutoPlay(true); } else { setAutoPlay(p => !p); } }}
+                      style={{ background: autoPlay ? `${T.green}1A` : "transparent", border: `1px solid ${autoPlay ? T.green : T.cyanDim}`, color: autoPlay ? T.green : T.cyanDim, borderRadius: 6, padding: "3px 10px", fontSize: 11, fontFamily: "'JetBrains Mono',monospace", cursor: "pointer" }}>
+                      {atEnd ? "↻ REPLAY" : autoPlay ? "❚❚ PAUSE" : "▶ PLAY"}
+                    </button>
                     <div style={{ flex: 1 }} />
                     <button onClick={deckClose}
                       style={{ background: "transparent", border: "none", color: T.cyanDim, fontSize: 15, lineHeight: 1, padding: 2, cursor: "pointer" }}>×</button>
