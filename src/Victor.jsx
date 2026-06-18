@@ -317,7 +317,7 @@ export default function Victor() {
     setRoomCode(''); setMyRole(null); setRoomOnline({});
   }
 
-  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [messages, loading]);
+  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = 0; }, [messages, loading]);
 
   const speak = useCallback((text) => {
     if (!voiceOn || typeof window === "undefined" || !window.speechSynthesis) return;
@@ -440,7 +440,12 @@ export default function Victor() {
     ? (MODES[[...messages].reverse().find(m => m.mode)?.mode] || MODES.A)
     : MODES[mode];
 
-  const activeSpeaker = loading ? "victor" : (speaking ? "victor" : null);
+  // Who's speaking: Victor by default. If his latest reply brings in Margaret (CFO) or Ronda, light their seat too.
+  const lastVictorMsg = [...messages].reverse().find(m => m.role === "assistant");
+  const lastText = lastVictorMsg ? lastVictorMsg.content.toLowerCase() : "";
+  const cfoActive = !loading && /\bmargaret\b/.test(lastText);
+  const rondaActive = !loading && /\bronda\b/.test(lastText);
+  const activeSpeaker = loading ? "victor" : (speaking ? "victor" : (cfoActive ? "cfo" : (rondaActive ? "secretary" : null)));
 
   // ----- styles -----
   const wrap = { background: T.bg, color: T.text, minHeight: "100vh", fontFamily: "'Space Grotesk','Inter',system-ui,sans-serif", display: "flex", flexDirection: "column" };
@@ -851,7 +856,13 @@ export default function Victor() {
                 <div style={{ fontSize: 13, lineHeight: 1.6 }}>Brief him on where Aurora Horizon stands, or hit a button below. He works off real numbers — feed him what you've got under <span style={{ color: T.cyan }}>DATA</span>, and he won't invent the rest.</div>
               </div>
             )}
-            {messages.map((m, i) => (
+            {loading && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, color: T.cyan, fontSize: 13, margin: "16px 0", fontFamily: "'JetBrains Mono',monospace" }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: T.cyan, animation: "pulse 1s infinite" }} />
+                Victor is thinking…
+              </div>
+            )}
+            {[...messages].reverse().map((m, i) => (
               m.role === "user" ? (
                 <div key={i} style={{ display: "flex", justifyContent: "flex-end", margin: "12px 0" }}>
                   <div style={{ maxWidth: "76%", background: T.panel, border: `1px solid ${T.lineSoft}`, borderRadius: "12px 12px 4px 12px", padding: "10px 14px", fontSize: 14, lineHeight: 1.5 }}>{m.content}</div>
@@ -870,12 +881,6 @@ export default function Victor() {
                 </div>
               )
             ))}
-            {loading && (
-              <div style={{ display: "flex", alignItems: "center", gap: 8, color: T.cyan, fontSize: 13, margin: "16px 0", fontFamily: "'JetBrains Mono',monospace" }}>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: T.cyan, animation: "pulse 1s infinite" }} />
-                Victor is thinking…
-              </div>
-            )}
             {error && <div style={{ color: T.amber, fontSize: 13, margin: "12px 0", border: `1px solid ${T.amber}55`, borderRadius: 8, padding: "10px 12px" }}>{error}</div>}
           </div>
 
