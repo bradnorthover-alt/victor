@@ -213,9 +213,11 @@ export default function Victor() {
   const [pointIdx, setPointIdx] = useState(1);   // how many points revealed on current slide
   const [vote, setVote] = useState(null);  // {question, victor:{choice,reason}, brad:choice|null, jonathan:'pending'|choice}
   // --- Room state (Milestone 2: shared live meeting) ---
+  const [myName, setMyName] = useState(() => localStorage.getItem('victor_name') || '');
   const [roomCode, setRoomCode] = useState('');
   const [myRole, setMyRole] = useState(null); // 'brad' or 'jonathan'
   const [roomOnline, setRoomOnline] = useState({});
+  const [roomNames, setRoomNames] = useState({brad:'Brad', jonathan:'Jonathan'});
   const [roomInput, setRoomInput] = useState('');
   const [roomCreating, setRoomCreating] = useState(false);
 
@@ -255,6 +257,7 @@ export default function Victor() {
       if (!snap.exists()) return;
       const d = snap.data();
       if (d.members) setRoomOnline(d.members);
+      if (d.memberNames) setRoomNames(d.memberNames);
       if (d.agenda !== undefined) setAgenda(d.agenda);
       if (d.actions) setActions(d.actions);
       if (d.minutes) setMinutes(d.minutes);
@@ -277,6 +280,7 @@ export default function Victor() {
     await setDoc(doc(db, 'rooms', code), {
       code, created: Date.now(),
       members: { brad: true, jonathan: false },
+      memberNames: { brad: myName || 'Brad', jonathan: '' },
       agenda: '', actions: [], minutes: [],
       slides: [], slideIdx: 0, pointIdx: 1,
       deckTitle: '', vote: null,
@@ -286,15 +290,17 @@ export default function Victor() {
     setMyRole('brad');
     setRoomCreating(false);
     setPanel(null);
+    // Update member name
+    try { await updateDoc(doc(db, 'rooms', code), { 'memberNames.brad': myName || 'Brad' }); } catch(e) {}
   }
 
   async function joinRoom(code) {
     try {
       const snap = await getDoc(doc(db, 'rooms', code));
       if (!snap.exists()) { alert('Room not found. Check the code.'); return; }
-      await updateDoc(doc(db, 'rooms', code), { 'members.jonathan': true });
+      await updateDoc(doc(db, 'rooms', code), { 'members.jonathan': true, 'memberNames.jonathan': myName || 'Jonathan' });
       setRoomCode(code);
-      setMyRole('jonathan');
+      setMyRole(myName && myName.toLowerCase() === 'brad' ? 'brad' : 'jonathan');
       setPanel(null);
       setView('boardroom');
     } catch(e) { alert('Could not join room: ' + e.message); }
@@ -891,6 +897,15 @@ export default function Victor() {
                 <div style={{ fontFamily:"'JetBrains Mono',monospace", letterSpacing:2, color: T.cyan, fontSize:13, marginBottom:16 }}>
                   {roomCode ? `ACTIVE ROOM: ${roomCode}` : "START OR JOIN A ROOM"}
                 </div>
+                {!myName && (
+                  <div style={{ marginBottom:16, padding:12, background:`${T.panel}`, border:`1px solid ${T.line}`, borderRadius:10 }}>
+                    <div style={{ fontSize:12, color:T.muted, marginBottom:8 }}>Who are you?</div>
+                    <div style={{ display:"flex", gap:8 }}>
+                      <button style={{ ...btn(false, T.green), flex:1 }} onClick={() => { setMyName('Brad'); localStorage.setItem('victor_name','Brad'); }}>BRAD</button>
+                      <button style={{ ...btn(false, T.amber), flex:1 }} onClick={() => { setMyName('Jonathan'); localStorage.setItem('victor_name','Jonathan'); }}>JONATHAN</button>
+                    </div>
+                  </div>
+                )}
                 {!roomCode ? (
                   <div>
                     <div style={{ fontSize:12, color:T.muted, lineHeight:1.5, marginBottom:16 }}>
