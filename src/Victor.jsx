@@ -67,10 +67,10 @@ const store = {
   },
 };
 const K = { msgs: "victor:messages", rules: "victor:rules", state: "victor:companystate",
-  ledger: "victor:ledger", persona: "victor:persona", mode: "victor:mode", projects: "victor:projects", archive: "victor:archive" };
+  ledger: "victor:ledger", persona: "victor:persona", mode: "victor:mode", projects: "victor:projects", archive: "victor:archive", finance: "victor:finance", openactions: "victor:openactions" };
 
 // ---------- the system prompt that makes Victor, Victor ----------
-function buildSystem({ rules, companyState, mode, persona, ledger, projects }) {
+function buildSystem({ rules, companyState, mode, persona, ledger, projects, finance, openActions }) {
   const modeLine = mode === "auto"
     ? "Assess the situation yourself and operate in EXPANSION (A), STEADY (B), or CRISIS (C)."
     : `Brad has set you to ${MODES[mode].label} mode (${mode}). Operate in it unless the data screams otherwise — if it does, say so.`;
@@ -85,6 +85,12 @@ OPERATING MODE: ${modeLine}
 
 CURRENT COMPANY STATE (as Brad has entered it \u2014 treat blanks as unknown, do not guess):
 ${companyState && companyState.trim() ? companyState : "(Brad has not entered a state snapshot yet.)"}
+
+FINANCE (the real numbers Margaret the CFO reasons from \u2014 NEVER invent or extrapolate beyond what's here; if a figure is missing, Margaret says so and asks Brad for it):
+${finance && finance.trim() ? finance : "(Brad has not entered any financial figures yet. Margaret should ask for cash on hand, monthly burn, and any revenue before giving a runway read.)"}
+
+OPEN ACTION ITEMS (carried over from past meetings \u2014 Ronda tracks these; surface any that are stalled and chase them):
+${openActions && openActions.length ? openActions.map((a) => `- ${a}`).join("\n") : "(No open action items tracked.)"}
 
 YOUR EVOLVING READ (private notes from past sessions \u2014 sharpen them as you learn him):
 ${persona && persona.trim() ? persona : "(No notes yet. Form your read of Brad and the business as you go.)"}
@@ -104,7 +110,9 @@ HOW YOU RESPOND:
 - Name anything that could kill the company.
 - Play devil's advocate on demand \u2014 argue against your own pick so Brad sees both sides.
 - In a meeting, you may address by name and invite the angle of: Jonathan (co-owner), Ronda (the office administrator who keeps minutes and handles operations/admin), and Margaret (the CFO — your finance lead).
+- VOICES: In meetings or whenever another character speaks, mark each speaker's turn by starting a new paragraph with their name in square brackets, exactly like: [Margaret] ... or [Ronda] ... or [Jonathan] ... . Your own turns use [Victor] or no bracket. This lets each voice render distinctly at the table. Keep each character true to their role and let them genuinely disagree.
 - Margaret, the CFO, is your numbers conscience. When money, runway, pricing, spend, or financial risk is on the table, bring Margaret in explicitly: pose the question to her, state the financial read in her voice (grounded only in the real numbers Brad has given — she NEVER invents figures), and let her push back on you. She is conservative on cash and blunt about what the company cannot afford. You and Margaret can disagree in front of Brad — that tension is useful. When you bring her in, write it naturally e.g. "Margaret — what does the runway say?" then give her answer.
+- ROUND TABLE: When Brad asks to "go around the table" or hear from everyone, give a short turn from each relevant voice in sequence \u2014 [Margaret] on the numbers, [Ronda] on operations/admin, and prompt [Jonathan] for his (noting his is pending until he weighs in) \u2014 then close with your own [Victor] synthesis.
 - When you are running a meeting, also emit these system lines at the very end (each on its own line):
     <<<AGENDA: the single agenda item in a few words>>>  (only when you open or reframe a meeting)
     <<<ACTION: an action item | owner | rough timeframe>>>  (one line per action item, as they arise)
@@ -158,9 +166,23 @@ function parseTags(raw) {
 }
 
 // tiny bold renderer for **x**, plus styled Confidence / Trade-off lines
+const SPEAKER_COLORS = { victor: "#4FD1E0", margaret: "#D8B45A", ronda: "#8B7FD6", jonathan: "#E8915B", brad: "#5FD08C" };
 function renderBody(text) {
   return text.split("\n").map((line, i) => {
     const trimmed = line.trim();
+    // Speaker turn: [Name] rest of line
+    const sp = trimmed.match(/^\[([A-Za-z]+)\]\s*(.*)$/);
+    if (sp) {
+      const who = sp[1].toLowerCase();
+      const c = SPEAKER_COLORS[who] || "#D6E1EC";
+      const nm = sp[1].charAt(0).toUpperCase() + sp[1].slice(1).toLowerCase();
+      return (
+        <div key={i} style={{ margin: "10px 0 4px", paddingLeft: 10, borderLeft: `2px solid ${c}` }}>
+          <span style={{ fontSize: 11, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1.2, color: c, fontWeight: 600 }}>{nm.toUpperCase()}</span>
+          {sp[2] ? <div style={{ marginTop: 2, lineHeight: 1.55 }}>{sp[2]}</div> : null}
+        </div>
+      );
+    }
     const conf = trimmed.match(/^Confidence:\s*(High|Medium|Low)\b(.*)$/i);
     if (conf) {
       const lvl = conf[1].toLowerCase();
@@ -192,6 +214,8 @@ export default function Victor() {
   const [messages, setMessages] = useState([]);
   const [rules, setRules] = useState(DEFAULT_RULES);
   const [companyState, setCompanyState] = useState("");
+  const [finance, setFinance] = useState("");
+  const [openActions, setOpenActions] = useState([]);
   const [ledger, setLedger] = useState([]);
   const [projects, setProjects] = useState([]);
   const [persona, setPersona] = useState("");
@@ -219,6 +243,8 @@ export default function Victor() {
   const [roomCode, setRoomCode] = useState('');
   const [myRole, setMyRole] = useState(null); // 'brad' or 'jonathan'
   const [roomOnline, setRoomOnline] = useState({});
+  const [roomChat, setRoomChat] = useState([]);
+  const [chatInput, setChatInput] = useState("");
   const [roomNames, setRoomNames] = useState({brad:'Brad', jonathan:'Jonathan'});
   const [roomInput, setRoomInput] = useState('');
   const [roomCreating, setRoomCreating] = useState(false);
@@ -236,13 +262,15 @@ export default function Victor() {
   // hydrate from storage once
   useEffect(() => {
     (async () => {
-      const [m, r, s, l, p, md, pr, ar] = await Promise.all([
+      const [m, r, s, l, p, md, pr, ar, fi, oa] = await Promise.all([
         store.get(K.msgs), store.get(K.rules), store.get(K.state),
         store.get(K.ledger), store.get(K.persona), store.get(K.mode),
-        store.get(K.projects), store.get(K.archive),
+        store.get(K.projects), store.get(K.archive), store.get(K.finance), store.get(K.openactions),
       ]);
       if (m) try { setMessages(JSON.parse(m)); } catch {}
       if (ar) try { setMeetingArchive(JSON.parse(ar)); } catch {}
+      if (fi) setFinance(fi);
+      if (oa) try { setOpenActions(JSON.parse(oa)); } catch {}
       if (r) try { setRules(JSON.parse(r)); } catch {}
       if (s) setCompanyState(s);
       if (l) try { setLedger(JSON.parse(l)); } catch {}
@@ -269,6 +297,7 @@ export default function Victor() {
       if (d.slideIdx !== undefined) setSlideIdx(d.slideIdx);
       if (d.pointIdx !== undefined) setPointIdx(d.pointIdx);
       if (d.vote !== undefined) setVote(d.vote);
+      if (d.chat) setRoomChat(d.chat);
     });
     return () => unsub();
   }, [roomCode]);
@@ -276,6 +305,16 @@ export default function Victor() {
   async function roomUpdate(data) {
     if (!roomCode) return;
     try { await updateDoc(doc(db, 'rooms', roomCode), data); } catch(e) {}
+  }
+
+  async function sendRoomChat() {
+    const txt = chatInput.trim();
+    if (!txt || !roomCode) return;
+    const entry = { who: myName || (myRole === "jonathan" ? "Jonathan" : "Brad"), role: myRole || "brad", text: txt, ts: Date.now() };
+    const next = [...roomChat, entry].slice(-100);
+    setRoomChat(next);
+    setChatInput("");
+    roomUpdate({ chat: next });
   }
 
   async function createRoom() {
@@ -287,7 +326,7 @@ export default function Victor() {
       memberNames: { brad: myName || 'Brad', jonathan: '' },
       agenda: '', actions: [], minutes: [],
       slides: [], slideIdx: 0, pointIdx: 1,
-      deckTitle: '', vote: null,
+      deckTitle: '', vote: null, chat: [],
     });
     await updateDoc(doc(db, 'rooms', code), { 'members.brad': true });
     setRoomCode(code);
@@ -336,13 +375,16 @@ export default function Victor() {
   }, [voiceOn]);
 
   async function callVictor(userText, opts = {}) {
-    const next = [...messages, { role: "user", content: userText }];
+    // In a shared room, tell Victor who is speaking so he can address them by name.
+    const speaker = roomCode ? (myName || (myRole === "jonathan" ? "Jonathan" : "Brad")) : null;
+    const sentText = speaker && myRole === "jonathan" ? `[From Jonathan, co-owner] ${userText}` : userText;
+    const next = [...messages, { role: "user", content: sentText, from: speaker }];
     setMessages(next);
     setInput("");
     setLoading(true);
     setError("");
     try {
-      const system = buildSystem({ rules, companyState, mode, persona, ledger, projects });
+      const system = buildSystem({ rules, companyState, mode, persona, ledger, projects, finance, openActions });
       const res = await fetch("/api/claude", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -385,6 +427,11 @@ export default function Victor() {
     { label: "Devil's advocate", prompt: "Take the position I currently favour and demolish it. Be the skeptical board member: every weakness, every blind spot, the case for doing the opposite. Don't go easy." },
     { label: "Present to me", prompt: "Put your current recommendation up on the boardroom screen and present it to me — title plus the key points, the way you'd brief the board." },
     { label: "Call a vote", prompt: "Put your current recommendation to a board vote. Frame it as one clear yes/no question and cast your own honest vote with a one-line reason." },
+    { label: "Ask the CFO", prompt: "Bring Margaret, the CFO, in. Pose the current financial question to her and give her honest read on the money, runway, and what we can or can't afford \u2014 grounded only in the real numbers I've given. Let her push back on me." },
+    { label: "90-day plan", prompt: "Lay out a focused 90-day plan: the top 3 outcomes I should drive, the sequence, and what done looks like for each. Keep it realistic for a bootstrapped solo founder." },
+    { label: "Hold me accountable", prompt: "Look at the decisions on the ledger and my open projects. Where have I said I'd do something and not moved? Call it out plainly and tell me the next concrete step on each." },
+    { label: "Competitor check", prompt: "Who or what competes with MapleCheck, and where are we exposed? Give me the realistic competitive picture and the one move that widens our moat." },
+    { label: "Round table", prompt: "Go around the table on the current question. Give me a short turn from Margaret (the numbers), Ronda (operations/admin), and prompt Jonathan for his view, then close with your own synthesis. Mark each speaker." },
   ];
 
   function callMeeting() {
@@ -396,6 +443,37 @@ export default function Victor() {
       "Call this meeting to order. Set the single agenda item that matters most right now, present your read with the numbers we actually have, then put a hard question to me. Bring Margaret (CFO) in on anything touching money or runway, and Ronda or Jonathan where their angle helps.",
       { meeting: true }
     );
+  }
+
+
+  function exportReport(rec) {
+    const d = new Date(rec.when);
+    const lines = [];
+    lines.push("VICTOR \u2014 MEETING REPORT");
+    lines.push("Aurora Horizon Digital");
+    lines.push(d.toLocaleString());
+    lines.push("");
+    lines.push("AGENDA:");
+    lines.push("  " + (rec.agenda || "(none)"));
+    lines.push("");
+    if (rec.decided) { lines.push("DECISION:"); lines.push("  " + rec.decided); lines.push(""); }
+    if (rec.actions && rec.actions.length) {
+      lines.push("ACTION ITEMS:");
+      rec.actions.forEach(a => { const [t,o,w] = String(a).split("|").map(s=>s.trim()); lines.push("  - " + t + (o?" ["+o+"]":"") + (w?" ("+w+")":"")); });
+      lines.push("");
+    }
+    if (rec.minutes && rec.minutes.length) {
+      lines.push("MINUTES (Ronda):");
+      rec.minutes.forEach(m => lines.push("  \u2022 " + m));
+      lines.push("");
+    }
+    const blob = new Blob([lines.join("\n")], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "victor-meeting-" + d.toISOString().slice(0,10) + ".txt";
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   function adjournMeeting() {
@@ -411,6 +489,12 @@ export default function Victor() {
       const archive = [...meetingArchive, record];
       setMeetingArchive(archive);
       store.set(K.archive, JSON.stringify(archive));
+      // Carry this meeting's action items into the open-actions tracker
+      if (actions.length) {
+        const carried = [...openActions, ...actions.map(a => String(a).split("|")[0].trim())];
+        setOpenActions(carried);
+        store.set(K.openactions, JSON.stringify(carried));
+      }
     }
     setMeetingLive(false);
     setAgenda("");
@@ -765,6 +849,35 @@ export default function Victor() {
               <button style={{ ...btn(false, T.amber), marginTop: 12, width: "100%" }}
                 onClick={() => { setAgenda(""); setActions([]); setMinutes([]); }}>CLEAR MEETING RECORD</button>
             )}
+
+            {/* Live side-chat between Brad and Jonathan (only in a room) */}
+            {roomCode && (
+              <div style={{ marginTop: 18, borderTop: `1px solid ${T.lineSoft}`, paddingTop: 14 }}>
+                <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, letterSpacing: 2, color: T.cyan, marginBottom: 8 }}>ROOM CHAT \u00b7 BRAD &amp; JONATHAN</div>
+                <div style={{ maxHeight: 200, overflowY: "auto", marginBottom: 8 }}>
+                  {roomChat.length === 0 && <div style={{ fontSize: 12, color: T.muted }}>No messages yet. Talk to each other here \u2014 it's private between you two, separate from Victor.</div>}
+                  {roomChat.map((c, i) => {
+                    const mine = (c.role === myRole);
+                    const col = c.role === "jonathan" ? T.amber : T.green;
+                    return (
+                      <div key={i} style={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start", margin: "6px 0" }}>
+                        <div style={{ maxWidth: "82%", background: T.panel, border: `1px solid ${col}44`, borderRadius: mine ? "10px 10px 4px 10px" : "10px 10px 10px 4px", padding: "7px 11px" }}>
+                          <div style={{ fontSize: 9, color: col, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, marginBottom: 2 }}>{c.who}</div>
+                          <div style={{ fontSize: 13, lineHeight: 1.4 }}>{c.text}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <input value={chatInput} onChange={e => setChatInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") sendRoomChat(); }}
+                    placeholder="Message the room…"
+                    style={{ flex: 1, background: T.panel, color: T.text, border: `1px solid ${T.line}`, borderRadius: 8, padding: "8px 10px", fontSize: 13 }} />
+                  <button style={btn(false, T.cyan)} onClick={sendRoomChat} disabled={!chatInput.trim()}>SEND</button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -808,9 +921,11 @@ export default function Victor() {
         </button>
         <div style={{ flex: 1 }} />
         <button style={btn(panel === "state")} onClick={() => setPanel(panel === "state" ? null : "state")}>DATA</button>
+        <button style={btn(panel === "finance", finance ? T.gold : T.muted)} onClick={() => setPanel(panel === "finance" ? null : "finance")}>FINANCE</button>
         <button style={btn(panel === "projects")} onClick={() => setPanel(panel === "projects" ? null : "projects")}>PROJECTS</button>
         <button style={btn(panel === "rules")} onClick={() => setPanel(panel === "rules" ? null : "rules")}>RULES</button>
         <button style={btn(panel === "ledger")} onClick={() => setPanel(panel === "ledger" ? null : "ledger")}>LEDGER</button>
+        <button style={btn(panel === "reports", meetingArchive.length ? T.violet : T.muted)} onClick={() => setPanel(panel === "reports" ? null : "reports")}>REPORTS{meetingArchive.length ? ` (${meetingArchive.length})` : ""}</button>
         <button style={btn(voiceOn, T.green)} onClick={() => { setVoiceOn(v => !v); if (voiceOn && window.speechSynthesis) window.speechSynthesis.cancel(); }}>VOICE {voiceOn ? "ON" : "OFF"}</button>
         <button style={btn(panel === "room", roomCode ? T.green : T.muted)} onClick={() => setPanel(panel === "room" ? null : "room")}>
           {roomCode ? `ROOM ${roomCode}` : "JOIN / START"}
@@ -865,7 +980,10 @@ export default function Victor() {
             {[...messages].reverse().map((m, i) => (
               m.role === "user" ? (
                 <div key={i} style={{ display: "flex", justifyContent: "flex-end", margin: "12px 0" }}>
-                  <div style={{ maxWidth: "76%", background: T.panel, border: `1px solid ${T.lineSoft}`, borderRadius: "12px 12px 4px 12px", padding: "10px 14px", fontSize: 14, lineHeight: 1.5 }}>{m.content}</div>
+                  <div style={{ maxWidth: "76%", background: T.panel, border: `1px solid ${T.lineSoft}`, borderRadius: "12px 12px 4px 12px", padding: "10px 14px", fontSize: 14, lineHeight: 1.5 }}>
+                    {m.from && <div style={{ fontSize: 9, color: m.from === "Jonathan" ? T.amber : T.green, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, marginBottom: 3 }}>{m.from}</div>}
+                    {String(m.content).replace(/^\[From Jonathan, co-owner\]\s*/, "")}
+                  </div>
                 </div>
               ) : (
                 <div key={i} style={{ margin: "16px 0", maxWidth: 760 }}>
@@ -910,7 +1028,7 @@ export default function Victor() {
           <div onClick={e => e.stopPropagation()} style={{ width: narrow ? "100%" : 420, background: T.panel2, borderLeft: `1px solid ${T.line}`, height: "100%", padding: 20, overflowY: "auto" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <div style={{ fontFamily: "'JetBrains Mono',monospace", letterSpacing: 2, color: T.cyan, fontSize: 13 }}>
-                {panel === "state" ? "COMPANY DATA" : panel === "rules" ? "THE RULESET" : panel === "projects" ? "OPEN PROJECTS" : "DECISION LEDGER"}
+                {panel === "state" ? "COMPANY DATA" : panel === "finance" ? "FINANCE \u00b7 MARGARET" : panel === "rules" ? "THE RULESET" : panel === "projects" ? "OPEN PROJECTS" : panel === "reports" ? "MEETING REPORTS" : panel === "room" ? "LIVE MEETING ROOM" : "DECISION LEDGER"}
               </div>
               <button style={btn(false)} onClick={() => setPanel(null)}>CLOSE</button>
             </div>
@@ -924,6 +1042,21 @@ export default function Victor() {
               </div>
             )}
 
+
+            {panel === "finance" && (
+              <div>
+                <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.5, marginBottom: 10 }}>
+                  The real numbers Margaret (CFO) reasons from. She never invents figures \u2014 if it's blank, she'll ask for it. Cash, burn, revenue, runway, any commitments.
+                </div>
+                <textarea value={finance} onChange={e => { setFinance(e.target.value); store.set(K.finance, e.target.value); }}
+                  placeholder={"e.g.\nCash on hand: $\nMonthly burn: $ (hosting, APIs, tools)\nRevenue: $0/mo\nRunway: months\nCommitted spend: Anthropic API ~$5 loaded, FatSecret free tier\nBiggest cost risk:"}
+                  rows={12} style={{ width: "100%", resize: "vertical", background: T.panel, color: T.text, border: `1px solid ${T.gold}55`, borderRadius: 10, padding: 12, fontSize: 13, fontFamily: "'JetBrains Mono',monospace", lineHeight: 1.5 }} />
+                <button style={{ ...btn(false, T.gold), marginTop: 10, width: "100%" }} disabled={loading}
+                  onClick={() => { setPanel(null); callVictor("Margaret \u2014 give me a straight read on our finances as they stand: runway, what's safe to spend, and the one number I should be watching. Push back if I'm being loose with cash."); }}>
+                  ASK MARGARET FOR A FINANCIAL READ
+                </button>
+              </div>
+            )}
             {panel === "rules" && (
               <div>
                 <div style={{ fontSize: 12, color: T.muted, marginBottom: 12, lineHeight: 1.5 }}>Victor checks every recommendation against these. He won't recommend anything that breaks one.</div>
@@ -1000,6 +1133,61 @@ export default function Victor() {
                     <button style={{ ...btn(false, T.amber), width:"100%" }} onClick={() => { leaveRoom(); setPanel(null); }}>LEAVE ROOM</button>
                   </div>
                 )}
+              </div>
+            )}
+            {panel === "reports" && (
+              <div>
+                {openActions.length > 0 && (
+                  <div style={{ marginBottom: 18, background: `${T.green}0E`, border: `1px solid ${T.green}44`, borderRadius: 10, padding: "12px 14px" }}>
+                    <div style={{ fontSize: 10, color: T.green, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 2, marginBottom: 8 }}>OPEN ACTION ITEMS \u00b7 {openActions.length}</div>
+                    {openActions.map((a, i) => (
+                      <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6, fontSize: 13, lineHeight: 1.4 }}>
+                        <span style={{ color: T.green }}>\u25b8</span>
+                        <span style={{ flex: 1 }}>{a}</span>
+                        <button style={{ ...btn(false, T.green), fontSize: 10, padding: "2px 8px" }} onClick={() => { const na = openActions.filter((_, j) => j !== i); setOpenActions(na); store.set(K.openactions, JSON.stringify(na)); }}>DONE</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div style={{ fontSize: 12, color: T.muted, marginBottom: 14, lineHeight: 1.5 }}>
+                  Every meeting you adjourn is archived here \u2014 agenda, decision, action items, and Ronda's minutes. Newest first.
+                </div>
+                {meetingArchive.length === 0 && (
+                  <div style={{ color: T.muted, fontSize: 13, padding: "20px 0", textAlign: "center" }}>
+                    No meetings archived yet. Call a meeting, work it, then hit ADJOURN MEETING to save a report here.
+                  </div>
+                )}
+                {[...meetingArchive].reverse().map((rec, i) => {
+                  const d = new Date(rec.when);
+                  const dateStr = d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) + " \u00b7 " + d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+                  return (
+                    <div key={i} style={{ marginBottom: 14, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 10, padding: "14px 16px" }}>
+                      <div style={{ fontSize: 10, color: T.muted, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, marginBottom: 8 }}>{dateStr}</div>
+                      <div style={{ fontSize: 10, color: T.cyan, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 2, marginBottom: 3 }}>AGENDA</div>
+                      <div style={{ fontSize: 13.5, color: T.text, marginBottom: 10, lineHeight: 1.4 }}>{rec.agenda}</div>
+                      {rec.decided && (<>
+                        <div style={{ fontSize: 10, color: T.green, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 2, marginBottom: 3 }}>DECISION</div>
+                        <div style={{ fontSize: 13, color: T.green, marginBottom: 10, lineHeight: 1.4 }}>{rec.decided}</div>
+                      </>)}
+                      {rec.actions && rec.actions.length > 0 && (<>
+                        <div style={{ fontSize: 10, color: T.muted, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 2, marginBottom: 4 }}>ACTION ITEMS</div>
+                        {rec.actions.map((a, j) => {
+                          const [task, owner, when] = String(a).split("|").map(s => s.trim());
+                          return <div key={j} style={{ fontSize: 12.5, marginBottom: 4, lineHeight: 1.4 }}><span style={{ color: T.green }}>\u25b8 </span>{task}{owner ? <span style={{ color: T.green }}> \u00b7 {owner}</span> : null}{when ? <span style={{ color: T.muted }}> \u00b7 {when}</span> : null}</div>;
+                        })}
+                        <div style={{ height: 8 }} />
+                      </>)}
+                      {rec.minutes && rec.minutes.length > 0 && (<>
+                        <div style={{ fontSize: 10, color: T.violet, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 2, marginBottom: 4 }}>RONDA'S MINUTES</div>
+                        {rec.minutes.map((m, j) => <div key={j} style={{ fontSize: 12, color: T.text, opacity: 0.82, marginBottom: 4, paddingLeft: 8, borderLeft: `2px solid ${T.violet}55`, lineHeight: 1.4 }}>{m}</div>)}
+                      </>)}
+                      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                        <button style={{ ...btn(false, T.cyan), fontSize: 11 }} onClick={() => exportReport(rec)}>EXPORT</button>
+                        <button style={{ ...btn(false, T.amber), fontSize: 11 }} onClick={() => { const na = meetingArchive.filter((_, k) => k !== (meetingArchive.length - 1 - i)); setMeetingArchive(na); store.set(K.archive, JSON.stringify(na)); }}>DELETE</button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
             {panel === "ledger" && (
