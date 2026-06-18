@@ -70,13 +70,31 @@ const K = { msgs: "victor:messages", rules: "victor:rules", state: "victor:compa
   ledger: "victor:ledger", persona: "victor:persona", mode: "victor:mode", projects: "victor:projects", archive: "victor:archive", finance: "victor:finance", openactions: "victor:openactions" };
 
 // ---------- the system prompt that makes Victor, Victor ----------
-function buildSystem({ rules, companyState, mode, persona, ledger, projects, finance, openActions }) {
+function buildSystem({ rules, companyState, mode, persona, ledger, projects, finance, openActions, attendance }) {
   const modeLine = mode === "auto"
     ? "Assess the situation yourself and operate in EXPANSION (A), STEADY (B), or CRISIS (C)."
     : `Brad has set you to ${MODES[mode].label} mode (${mode}). Operate in it unless the data screams otherwise — if it does, say so.`;
   return `You are VICTOR, the acting Chief Executive Officer of Aurora Horizon Digital — a Canadian software company registered in Nova Scotia, founded by Brad Northover (non-technical). The flagship product is MapleCheck Canada, an Android grocery barcode-scanner app on React Native / Expo, currently in Google Play internal testing with four testers (including Brad and his fianc\u00e9 / co-owner Jonathan), zero users, zero revenue, bootstrapped.
 
 YOU ARE NOT A CHATBOT. You are a seasoned, Fortune-500-calibre operator with a JARVIS-like composure: precise, controlled, formal but never cold. You think in options and trade-offs. You push back hard when Brad is wrong and you make him defend his position. You are willing to tell him no \u2014 bluntly \u2014 and you defend why. You surface angles he would not reach on his own; that is the entire reason you exist. You think ahead: where the market goes, what competitors do, what bites in three, six, twelve months. You flag cutbacks and waste as readily as growth. You never flatter, never pad. You NEVER invent users, revenue, installs, or any number \u2014 if you lack data, say so plainly and tell Brad exactly what to bring you.
+
+YOUR TEAM \u2014 THE STANDING AI CAST (Victor, Margaret, Ronda are fictional advisors you voice; portray them with consistent personality. Brad and Jonathan are REAL people \u2014 never invent words, opinions, backstory, or personality for them; they speak only for themselves):
+
+\u2022 VICTOR (you) \u2014 acting CEO. Composed, strategic, blunt. Speaks in measured, complete sentences. Dry wit used sparingly. Carries the meeting and synthesizes.
+
+\u2022 MARGARET \u2014 CFO. Former bank credit officer; she has watched companies die from optimism. Precise, conservative on cash, allergic to vague numbers. Speaks in short, exact sentences and asks for the figure when it's missing. She is the brake to your accelerator. She does not soften bad financial news. She reasons ONLY from the FINANCE data Brad entered \u2014 never invents a number.
+
+\u2022 RONDA \u2014 Office Administrator. Warm but firm, the one who keeps things from falling through the cracks. Tracks commitments, remembers what was promised, gently calls out what hasn't been done. Speaks plainly and practically. Keeps the minutes.
+
+HOW THE ROOM BEHAVES (realism \u2014 applies to the AI cast only):
+- THINKING BEATS: Before a character delivers a heavy judgment, give a brief stage direction in italics-style brackets, e.g. [Margaret runs the numbers a moment] then her line. Use sparingly, only when it adds weight.
+- INTERRUPTIONS / REACTIONS: Characters react in the moment. If Brad proposes spending, Margaret may cut in. If something carries risk to Jonathan or the company, the relevant voice reacts. It should feel like a room, not a queue of monologues.
+- CONSISTENT STANCES: Each character holds a stable point of view across the conversation and across meetings. Margaret stays cautious on cash; Ronda stays focused on follow-through; you stay focused on strategy and growth-within-the-rules. Don't flip-flop to be agreeable.
+- DISAGREEMENT THAT RESOLVES: When you and Margaret (or others) genuinely disagree, don't leave it hanging as "two views." Argue it, then drive to a recommendation \u2014 state who carries the point and why, and what would change the answer. Brad still makes the final call.
+- EMOTIONAL READ: Pay attention to how Brad sounds, not just what he asks. If he reads as stressed, scattered, or burning out, notice it (Rule 3 \u2014 don't burn him out). A brief human acknowledgment from you or Ronda is appropriate before getting back to business. Never be saccharine.
+- PRE-MEETING PREP: In meetings, the cast arrives having "reviewed" the real data. Reference specific figures Brad actually entered (finance, projects, ledger) rather than speaking generally. If a number is missing, say so.
+- FOLLOW-THROUGH MEMORY: Reference prior decisions (the ledger) and open action items. If something was committed last time and isn't done, Ronda or you should surface it.
+- STAGE DIRECTIONS: Physical/atmospheric cues go in brackets on their own, e.g. [Ronda turns a page] or [Margaret slides a figure across the table]. Keep them short and occasional \u2014 seasoning, not theatre.
 
 INVIOLABLE RULES \u2014 these override every recommendation. If an option breaks one, you do not recommend it; you say which rule and why:
 ${rules.map((r, i) => `${i + 1}. ${r}`).join("\n")}
@@ -91,6 +109,11 @@ ${finance && finance.trim() ? finance : "(Brad has not entered any financial fig
 
 OPEN ACTION ITEMS (carried over from past meetings \u2014 Ronda tracks these; surface any that are stalled and chase them):
 ${openActions && openActions.length ? openActions.map((a) => `- ${a}`).join("\n") : "(No open action items tracked.)"}
+
+WHO IS AT THE TABLE RIGHT NOW (for roll call \u2014 do not claim someone is present who isn't):
+${attendance && attendance.inRoom
+  ? `Live room is active. Brad is present. Jonathan is ${attendance.jonathanHere ? "PRESENT (has joined the room)" : "NOT yet joined (absent \u2014 do not speak for him)"}. Margaret (CFO) and Ronda (Office Administrator) are present as your standing team.`
+  : "Solo session with Brad (no live room). Brad is present; Jonathan is not in a shared room. Margaret and Ronda are present as your standing team."}
 
 YOUR EVOLVING READ (private notes from past sessions \u2014 sharpen them as you learn him):
 ${persona && persona.trim() ? persona : "(No notes yet. Form your read of Brad and the business as you go.)"}
@@ -113,7 +136,13 @@ HOW YOU RESPOND:
 - VOICES: In meetings or whenever another character speaks, mark each speaker's turn by starting a new paragraph with their name in square brackets, exactly like: [Margaret] ... or [Ronda] ... or [Jonathan] ... . Your own turns use [Victor] or no bracket. This lets each voice render distinctly at the table. Keep each character true to their role and let them genuinely disagree.
 - Margaret, the CFO, is your numbers conscience. When money, runway, pricing, spend, or financial risk is on the table, bring Margaret in explicitly: pose the question to her, state the financial read in her voice (grounded only in the real numbers Brad has given — she NEVER invents figures), and let her push back on you. She is conservative on cash and blunt about what the company cannot afford. You and Margaret can disagree in front of Brad — that tension is useful. When you bring her in, write it naturally e.g. "Margaret — what does the runway say?" then give her answer.
 - ROUND TABLE: When Brad asks to "go around the table" or hear from everyone, give a short turn from each relevant voice in sequence \u2014 [Margaret] on the numbers, [Ronda] on operations/admin, and prompt [Jonathan] for his (noting his is pending until he weighs in) \u2014 then close with your own [Victor] synthesis.
-- When you are running a meeting, also emit these system lines at the very end (each on its own line):
+- MEETING PROTOCOL (when a meeting is called to order, run it like a real board chair):
+  1. ROLL CALL: Open by acknowledging who is actually at the table. Brad (Founder) is always present. Note whether Jonathan (co-owner) has joined the live room or is absent; greet whoever is here. Margaret (CFO) and Ronda (Office Administrator) are present as your standing team. Keep it to one or two lines, in character.
+  2. PRE-READ: Before diving into a significant decision, give a tight one-paragraph "pre-read" \u2014 the situation, what's at stake, and the decision on the table \u2014 so Brad walks in informed. Label it naturally (e.g. "Before we decide, here's the lay of the land:").
+  3. TIME-BOX: Keep the meeting focused on the single agenda item. If the discussion drifts, pull it back ("That's a separate meeting \u2014 parking it. Back to the item."). Don't let one meeting sprawl across many topics.
+  4. MOTION & SECOND: For a formal vote, first state the motion clearly ("The motion on the floor: ..."), ask for a second, and only then call the vote. In a solo session Brad both moves and seconds; in a live room invite Jonathan to second. THEN emit the VOTE tags.
+  5. MINUTES READ-BACK: When Brad adjourns (or asks to wrap), have Ronda read back a clean summary of what was decided and the action items, in her voice ([Ronda] ...), before the meeting closes.
+- - When you are running a meeting, also emit these system lines at the very end (each on its own line):
     <<<AGENDA: the single agenda item in a few words>>>  (only when you open or reframe a meeting)
     <<<ACTION: an action item | owner | rough timeframe>>>  (one line per action item, as they arise)
     <<<MINUTE: one-sentence note of what was decided or discussed>>>  (Ronda's running minutes)
@@ -125,6 +154,7 @@ HOW YOU RESPOND:
     <<<DECK: the deck title>>>
     <<<SLIDE: Slide heading :: point one | point two | point three>>>   (3 to 5 slides; each slide 2 to 4 short points, separated by | )
   Keep each point short and punchy, the way a real slide reads. Still give your full spoken analysis in the normal reply above; the deck is what goes up on the boardroom screen for you to click through.
+  When you put a deck up, open with a brief beat as the room lights go down \u2014 e.g. "Let me put this up. [the room dims] \u2014" before the slides. Treat it like a real presentation in a darkened boardroom.
 - End EVERY reply with exactly: <<<MODE:A>>> or <<<MODE:B>>> or <<<MODE:C>>> for your current read.
 - When your read of Brad or the business meaningfully shifts, add a line: <<<PERSONA: one short sentence>>>
 - When Brad commits to a concrete decision, add a line: <<<LEDGER: the decision in a few words>>>
@@ -170,6 +200,15 @@ const SPEAKER_COLORS = { victor: "#4FD1E0", margaret: "#D8B45A", ronda: "#8B7FD6
 function renderBody(text) {
   return text.split("\n").map((line, i) => {
     const trimmed = line.trim();
+    // Stage direction: a whole line wrapped in [ ... ] containing a space (a phrase, not just a name)
+    const stage = trimmed.match(/^\[(.+\s.+)\]$/);
+    if (stage) {
+      return (
+        <div key={i} style={{ margin: "8px 0", fontStyle: "italic", color: T.muted, fontSize: 12.5, lineHeight: 1.5, opacity: 0.9 }}>
+          {stage[1]}
+        </div>
+      );
+    }
     // Speaker turn: [Name] rest of line
     const sp = trimmed.match(/^\[([A-Za-z]+)\]\s*(.*)$/);
     if (sp) {
@@ -238,6 +277,8 @@ export default function Victor() {
   const [slideIdx, setSlideIdx] = useState(0);
   const [pointIdx, setPointIdx] = useState(1);   // how many points revealed on current slide
   const [autoPlay, setAutoPlay] = useState(false);
+  const [roomSound, setRoomSound] = useState(false);
+  const [timeOfDay, setTimeOfDay] = useState("night"); // day | dusk | night
   const [vote, setVote] = useState(null);  // {question, victor:{choice,reason}, brad:choice|null, jonathan:'pending'|choice}
   // --- Room state (Milestone 2: shared live meeting) ---
   const [myName, setMyName] = useState(() => localStorage.getItem('victor_name') || '');
@@ -385,7 +426,7 @@ export default function Victor() {
     setLoading(true);
     setError("");
     try {
-      const system = buildSystem({ rules, companyState, mode, persona, ledger, projects, finance, openActions });
+      const system = buildSystem({ rules, companyState, mode, persona, ledger, projects, finance, openActions, attendance: roomCode ? { inRoom: true, jonathanHere: !!roomOnline.jonathan, names: roomNames } : { inRoom: false } });
       const res = await fetch("/api/claude", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -406,11 +447,13 @@ export default function Victor() {
       store.set(K.msgs, JSON.stringify(out));
       if (np) { const merged = (persona ? persona + " " : "") + np; setPersona(merged); store.set(K.persona, merged); }
       if (nl) { const ml = [...ledger, nl]; setLedger(ml); store.set(K.ledger, JSON.stringify(ml)); }
-      if (ag) setAgenda(ag);
-      if (ac && ac.length) setActions(prev => [...prev, ...ac]);
-      if (mn && mn.length) setMinutes(prev => [...prev, ...mn]);
-      if (sl && sl.length) { setView("boardroom"); setDeckTitle(dt || "BRIEFING"); setSlides(sl); setSlideIdx(0); setPointIdx(1); }
-      if (vq) { setView("boardroom"); setVote({ question: vq, victor: vv || { choice: "—", reason: "" }, brad: null, jonathan: "pending" }); }
+      if (!opts.noTags) {
+        if (ag) setAgenda(ag);
+        if (ac && ac.length) setActions(prev => [...prev, ...ac]);
+        if (mn && mn.length) setMinutes(prev => [...prev, ...mn]);
+        if (sl && sl.length) { setView("boardroom"); setDeckTitle(dt || "BRIEFING"); setSlides(sl); setSlideIdx(0); setPointIdx(1); }
+        if (vq) { setView("boardroom"); setVote({ question: vq, victor: vv || { choice: "—", reason: "" }, brad: null, jonathan: "pending" }); }
+      }
       speak(text);
     } catch (e) {
       setError(e.message || "Connection to Victor failed.");
@@ -478,6 +521,10 @@ export default function Victor() {
   }
 
   function adjournMeeting() {
+    // Ronda reads back the minutes before we close (only if there's something to read)
+    if ((agenda || minutes.length || actions.length) && !loading) {
+      callVictor("We're adjourning. Ronda \u2014 read back a clean summary of what we decided and the action items before we close. Mark it as [Ronda].", { noTags: true });
+    }
     // Archive the meeting before clearing
     if (agenda || minutes.length || actions.length) {
       const record = {
@@ -540,6 +587,43 @@ export default function Victor() {
     // eslint-disable-next-line
   }, [slides.length > 0 ? deckTitle : null]);
 
+  // Optional low room-tone ambience (off by default; browser-safe, only after a click).
+  const audioRef = useRef(null);
+  useEffect(() => {
+    if (!roomSound) {
+      if (audioRef.current) { try { audioRef.current.osc.stop(); audioRef.current.ctx.close(); } catch(e){} audioRef.current = null; }
+      return;
+    }
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      const ctx = new AC();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine"; osc.frequency.value = 56; // low hum
+      gain.gain.value = 0.018;
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start();
+      audioRef.current = { ctx, osc, gain };
+    } catch(e) {}
+    return () => { if (audioRef.current) { try { audioRef.current.osc.stop(); audioRef.current.ctx.close(); } catch(e){} audioRef.current = null; } };
+  }, [roomSound]);
+
+  // Soft click when the slide advances (only if sound is on).
+  useEffect(() => {
+    if (!roomSound || !audioRef.current) return;
+    try {
+      const { ctx } = audioRef.current;
+      const o = ctx.createOscillator(); const g = ctx.createGain();
+      o.type = "square"; o.frequency.value = 320;
+      g.gain.setValueAtTime(0.04, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.08);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(); o.stop(ctx.currentTime + 0.09);
+    } catch(e) {}
+    // eslint-disable-next-line
+  }, [slideIdx]);
+
   const curMode = mode === "auto"
     ? (MODES[[...messages].reverse().find(m => m.mode)?.mode] || MODES.A)
     : MODES[mode];
@@ -550,6 +634,23 @@ export default function Victor() {
   const cfoActive = !loading && /\bmargaret\b/.test(lastText);
   const rondaActive = !loading && /\bronda\b/.test(lastText);
   const activeSpeaker = loading ? "victor" : (speaking ? "victor" : (cfoActive ? "cfo" : (rondaActive ? "secretary" : null)));
+
+  // Pull the most recent SPOKEN line + who said it, for the on-screen caption.
+  function latestSpoken() {
+    if (!lastVictorMsg) return null;
+    const lines = lastVictorMsg.content.split("\n").map(l => l.trim()).filter(Boolean);
+    let who = "victor", said = "";
+    for (const ln of lines) {
+      const sp = ln.match(/^\[([A-Za-z]+)\]\s*(.*)$/);
+      const stage = ln.match(/^\[(.+\s.+)\]$/);
+      if (stage) continue; // skip pure stage directions for the caption
+      if (sp) { who = sp[1].toLowerCase(); if (sp[2]) said = sp[2]; }
+      else { said = ln; }
+    }
+    const map = { margaret: "margaret", ronda: "ronda", victor: "victor", cfo: "margaret", secretary: "ronda" };
+    return { who: map[who] || "victor", said };
+  }
+  const spoken = latestSpoken();
 
   // ----- styles -----
   const wrap = { background: T.bg, color: T.text, minHeight: "100vh", fontFamily: "'Space Grotesk','Inter',system-ui,sans-serif", display: "flex", flexDirection: "column" };
@@ -562,8 +663,69 @@ export default function Victor() {
     boxShadow: active ? `0 0 12px ${c}55, 0 0 2px ${c} inset` : "none",
   });
 
+  // ---- Stylized SVG character avatars (fictional cast only) ----
+  function Avatar({ who, size = 64, talking = false }) {
+    const c = SPEAKER_COLORS[who] || T.cyan;
+    const ring = talking ? c : `${c}66`;
+    // distinct silhouette per character
+    const faces = {
+      victor: (
+        <g>
+          <rect x="20" y="14" width="24" height="10" rx="2" fill={`${c}22`} stroke={c} strokeWidth="1.2" />
+          <path d="M18 40 q14 -16 28 0 v6 q-14 -10 -28 0 z" fill={`${c}18`} stroke={c} strokeWidth="1.4" />
+          <circle cx="32" cy="30" r="13" fill={`${c}10`} stroke={c} strokeWidth="1.6" />
+          <circle cx="27" cy="29" r="1.6" fill={c} />
+          <circle cx="37" cy="29" r="1.6" fill={c} />
+          <path d="M27 35 q5 3 10 0" stroke={c} strokeWidth="1.3" fill="none" strokeLinecap="round" />
+        </g>
+      ),
+      margaret: (
+        <g>
+          <path d="M19 30 q0 -16 13 -16 q13 0 13 16 q0 5 -2 9 l-22 0 q-2 -4 -2 -9 z" fill={`${c}16`} stroke={c} strokeWidth="1.4" />
+          <path d="M20 44 q12 -12 24 0 v4 q-12 -8 -24 0 z" fill={`${c}18`} stroke={c} strokeWidth="1.4" />
+          <circle cx="32" cy="31" r="12" fill={`${c}10`} stroke={c} strokeWidth="1.6" />
+          <rect x="24" y="28" width="7" height="5" rx="2" fill="none" stroke={c} strokeWidth="1.1" />
+          <rect x="33" y="28" width="7" height="5" rx="2" fill="none" stroke={c} strokeWidth="1.1" />
+          <line x1="31" y1="30" x2="33" y2="30" stroke={c} strokeWidth="1.1" />
+          <path d="M28 37 q4 1.5 8 0" stroke={c} strokeWidth="1.3" fill="none" strokeLinecap="round" />
+        </g>
+      ),
+      ronda: (
+        <g>
+          <path d="M17 32 q0 -18 15 -18 q15 0 15 18 q0 8 -4 12 l-22 0 q-4 -4 -4 -12 z" fill={`${c}16`} stroke={c} strokeWidth="1.4" />
+          <path d="M21 45 q11 -11 22 0 v3 q-11 -7 -22 0 z" fill={`${c}18`} stroke={c} strokeWidth="1.4" />
+          <circle cx="32" cy="31" r="12" fill={`${c}10`} stroke={c} strokeWidth="1.6" />
+          <circle cx="27" cy="30" r="1.6" fill={c} />
+          <circle cx="37" cy="30" r="1.6" fill={c} />
+          <path d="M27 36 q5 4 10 0" stroke={c} strokeWidth="1.3" fill="none" strokeLinecap="round" />
+        </g>
+      ),
+    };
+    return (
+      <svg width={size} height={size} viewBox="0 0 64 64" style={{ borderRadius: "50%", background: "#0B1118", border: `2px solid ${ring}`, boxShadow: talking ? `0 0 18px ${c}aa` : "none", transition: "box-shadow .3s, border-color .3s" }}>
+        {faces[who] || faces.victor}
+      </svg>
+    );
+  }
+
   function Seat({ s }) {
     const on = activeSpeaker === s.id;
+    // occasional sip: each seat flips 'sipping' on at random intervals (cosmetic)
+    const [sipping, setSipping] = useState(false);
+    useEffect(() => {
+      let alive = true;
+      function schedule() {
+        const wait = 6000 + Math.random() * 12000; // 6–18s
+        return setTimeout(() => {
+          if (!alive) return;
+          setSipping(true);
+          setTimeout(() => { if (alive) setSipping(false); }, 3000);
+          tid = schedule();
+        }, wait);
+      }
+      let tid = schedule();
+      return () => { alive = false; clearTimeout(tid); };
+    }, []);
     // Brad & Jonathan: when a room is active, only show as "present" if they've actually joined.
     // Victor, Ronda & Margaret are the standing AI cast and are always present.
     const isHuman = s.id === "brad" || s.id === "jonathan";
@@ -572,8 +734,17 @@ export default function Victor() {
     const empty = !s.name;
     const displayName = isHuman && roomNames[s.id] ? roomNames[s.id] : s.name;
     const presenting = s.id === "victor" && slides.length > 0;
+    // Speaker spotlight: when someone is actively speaking, light them and dim the rest of the cast.
+    const someoneSpeaking = !!activeSpeaker && !curSlide;
+    const isSpeaker = activeSpeaker === s.id;
+    const seatDim = someoneSpeaking && !isSpeaker ? 0.55 : 1;
     return (
-      <div style={{ position: "absolute", left: `${s.x}%`, top: `${s.y}%`, transform: "translate(-50%,-50%)", textAlign: "center", zIndex: s.y > 50 ? 6 : 2 }}>
+      <div style={{ position: "absolute", left: `${s.x}%`, top: `${s.y}%`, transform: "translate(-50%,-50%)", textAlign: "center", zIndex: s.y > 50 ? 6 : 2, opacity: seatDim, transition: "opacity .5s ease" }}>
+        {/* spotlight pool when this character is speaking */}
+        {isSpeaker && (
+          <div style={{ position: "absolute", left: "50%", top: "40%", transform: "translate(-50%,-50%)", width: 120, height: 120, borderRadius: "50%", pointerEvents: "none", zIndex: 0,
+            background: `radial-gradient(circle, ${s.color}26 0%, ${s.color}10 40%, transparent 70%)`, animation: "spotPulse 2.4s ease-in-out infinite" }} />
+        )}
         {/* leather office chair (always stays) */}
         <div style={{ position: "relative", width: 52, margin: "0 auto" }}>
           {/* chair back */}
@@ -594,18 +765,40 @@ export default function Victor() {
             boxShadow: "0 3px 6px rgba(0,0,0,0.6)",
           }} />
         </div>
+        {/* coffee cup in front of the seat — steam always, occasional sip when NOT speaking */}
+        {!empty && !dimmed && (
+          <div style={{ position: "absolute", left: s.y > 50 ? "26%" : "70%", top: s.y > 50 ? "2%" : "10%", zIndex: 4, transformOrigin: "bottom center",
+            animation: (!isSpeaker && !curSlide && sipping) ? "sip 3s ease-in-out" : "none" }}>
+            {/* steam */}
+            {!curSlide && (
+              <div style={{ position: "absolute", left: "50%", top: -10, transform: "translateX(-50%)", width: 6, height: 12, borderRadius: 3,
+                background: "linear-gradient(180deg, rgba(255,255,255,0.5), transparent)", filter: "blur(1.5px)", animation: "steamRise 2.6s ease-in-out infinite" }} />
+            )}
+            {/* cup */}
+            <div style={{ width: 11, height: 9, borderRadius: "2px 2px 4px 4px", background: "linear-gradient(180deg,#e8e2d8,#c9c2b4)", border: "1px solid #8a8478", position: "relative" }}>
+              <div style={{ position: "absolute", right: -4, top: 1, width: 4, height: 5, borderRadius: "0 4px 4px 0", border: "1px solid #8a8478", borderLeft: "none" }} />
+              <div style={{ position: "absolute", inset: "1px 1px auto 1px", height: 2, background: "#3a2412", borderRadius: 1 }} />
+            </div>
+          </div>
+        )}
         {/* occupant — hidden for Victor while he's up presenting */}
         {!empty && !presenting && (
           <div style={{ marginTop: -34, position: "relative", zIndex: 3, opacity: dimmed ? 0.32 : 1, filter: dimmed ? "grayscale(0.7)" : "none", transition: "opacity .4s ease, filter .4s ease" }}>
-            <div style={{
-              width: 38, height: 38, borderRadius: "50%", margin: "0 auto",
-              border: `2px ${dimmed ? "dashed" : "solid"} ${dimmed ? T.muted : s.color}`,
-              background: dimmed ? "transparent" : `${s.color}${on ? "33" : "16"}`,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              color: dimmed ? T.muted : s.color, fontWeight: 700, fontSize: 15,
-              boxShadow: dimmed ? "none" : (on ? `0 0 22px ${s.color}, 0 0 4px ${s.color} inset` : `0 0 8px ${s.color}40`),
-              animation: on && !dimmed ? "speakerGlow 1.1s ease-in-out infinite" : "none",
-            }}>{displayName[0]}</div>
+            {(s.id === "victor" || s.id === "cfo" || s.id === "secretary") ? (
+              <div style={{ margin: "0 auto", width: 40, height: 40 }}>
+                <Avatar who={s.id === "cfo" ? "margaret" : s.id === "secretary" ? "ronda" : "victor"} size={40} talking={on} />
+              </div>
+            ) : (
+              <div style={{
+                width: 38, height: 38, borderRadius: "50%", margin: "0 auto",
+                border: `2px ${dimmed ? "dashed" : "solid"} ${dimmed ? T.muted : s.color}`,
+                background: dimmed ? "transparent" : `${s.color}${on ? "33" : "16"}`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: dimmed ? T.muted : s.color, fontWeight: 700, fontSize: 15,
+                boxShadow: dimmed ? "none" : (on ? `0 0 22px ${s.color}, 0 0 4px ${s.color} inset` : `0 0 8px ${s.color}40`),
+                animation: on && !dimmed ? "speakerGlow 1.1s ease-in-out infinite" : "none",
+              }}>{displayName[0]}</div>
+            )}
             <div style={{ fontSize: 10, color: dimmed ? T.muted : s.color, marginTop: 4, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 0.5 }}>{displayName}</div>
             <div style={{ fontSize: 8, color: T.muted, letterSpacing: 1 }}>{dimmed ? "NOT JOINED" : s.role.toUpperCase()}</div>
             {on && !dimmed && <div style={{ fontSize: 8, color: s.color, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1 }}>● SPEAKING</div>}
@@ -643,6 +836,40 @@ export default function Victor() {
     );
   }
 
+  function Platter() {
+    // donuts on a plate; one occasionally "gets eaten" (disappears) then the plate refills
+    const [count, setCount] = useState(5);
+    useEffect(() => {
+      let alive = true;
+      function loop() {
+        const wait = 9000 + Math.random() * 14000;
+        return setTimeout(() => {
+          if (!alive) return;
+          setCount(c => (c <= 2 ? 5 : c - 1)); // eat one, refill when low
+          tid = loop();
+        }, wait);
+      }
+      let tid = loop();
+      return () => { alive = false; clearTimeout(tid); };
+    }, []);
+    const donutColors = ["#E8915B", "#D8B45A", "#C77BA6", "#9C6630", "#E0A0C0"];
+    const positions = [[42,40],[56,42],[48,52],[40,54],[58,54]];
+    return (
+      <div style={{ position: "absolute", left: "44%", top: "44%", width: "14%", height: "14%", zIndex: 1 }}>
+        {/* plate */}
+        <div style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "radial-gradient(ellipse at 50% 40%, #e9e9ef, #c2c2cc)", border: "1px solid #9a9aa6", boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }} />
+        {positions.slice(0, count).map((p, i) => (
+          <div key={i} style={{ position: "absolute", left: `${p[0] - 38}%`, top: `${p[1] - 38}%`, width: 6, height: 6, borderRadius: "50%",
+            background: `radial-gradient(circle at 50% 40%, ${donutColors[i % donutColors.length]}, #5e3917)`,
+            boxShadow: `0 1px 2px rgba(0,0,0,0.4), inset 0 0 0 1px rgba(0,0,0,0.2)`,
+            transition: "opacity .4s ease" }}>
+            <div style={{ position: "absolute", inset: "34%", borderRadius: "50%", background: "#2a1a0c" }} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   function Boardroom() {
     const hasMeetingData = agenda || actions.length > 0 || minutes.length > 0;
     return (
@@ -659,11 +886,19 @@ export default function Victor() {
               {meetingLive ? "MEETING IN SESSION" : "BOARDROOM \u2014 NO MEETING IN SESSION"}
             </span>
           </div>
-          {meetingLive ? (
-            <button style={btn(false, T.amber)} onClick={adjournMeeting}>ADJOURN MEETING</button>
-          ) : (
-            <button style={btn(false, T.violet)} onClick={callMeeting} disabled={loading}>CALL MEETING TO ORDER</button>
-          )}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <button style={btn(false, T.cyanDim)} onClick={() => setTimeOfDay(t => t === "day" ? "dusk" : t === "dusk" ? "night" : "day")} title="Time of day">
+              {timeOfDay === "day" ? "☀ DAY" : timeOfDay === "dusk" ? "◗ DUSK" : "☾ NIGHT"}
+            </button>
+            <button style={btn(roomSound, T.cyanDim)} onClick={() => setRoomSound(s => !s)} title="Room ambience">
+              {roomSound ? "♪ SOUND ON" : "♪ SOUND OFF"}
+            </button>
+            {meetingLive ? (
+              <button style={btn(false, T.amber)} onClick={adjournMeeting}>ADJOURN MEETING</button>
+            ) : (
+              <button style={btn(false, T.violet)} onClick={callMeeting} disabled={loading}>CALL MEETING TO ORDER</button>
+            )}
+          </div>
         </div>
         <div style={{ display: "flex", gap: 18, alignItems: "flex-start", flexWrap: "wrap", justifyContent: "center" }}>
           <div style={{ flex: "1 1 360px", minWidth: 280 }}>
@@ -672,8 +907,21 @@ export default function Victor() {
               position: "relative", maxWidth: 540, margin: "0 auto", height: 440,
               borderRadius: 14, overflow: "hidden",
               border: `1px solid ${T.line}`,
-              background: "linear-gradient(180deg,#10171F 0%,#141C26 52%,#0C1118 52%,#070A0E 100%)",
+              background: timeOfDay === "day"
+                ? "linear-gradient(180deg,#1a2430 0%,#1d2935 52%,#10161d 52%,#0a0e13 100%)"
+                : timeOfDay === "dusk"
+                ? "linear-gradient(180deg,#1a1622 0%,#1d1c2e 52%,#0f0c16 52%,#08060c 100%)"
+                : "linear-gradient(180deg,#10171F 0%,#141C26 52%,#0C1118 52%,#070A0E 100%)",
+              transition: "background 1.2s ease",
             }}>
+              {/* MODE MOOD TINT — Crisis cools/tenses, Expansion warms, Steady neutral */}
+              <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 6, mixBlendMode: "overlay", transition: "background 1s ease",
+                background: curMode.key === "C" ? "rgba(80,140,200,0.16)" : curMode.key === "A" ? "rgba(230,160,90,0.10)" : "transparent" }} />
+
+              {/* HOUSE LIGHTS DOWN when presenting — room darkens, screen carries the light */}
+              <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 7, transition: "opacity 1s ease, background 1s ease",
+                opacity: curSlide ? 1 : 0,
+                background: "radial-gradient(120% 80% at 72% 30%, transparent 0%, rgba(4,6,9,0.30) 42%, rgba(3,4,7,0.72) 100%)" }} />
               {/* back wall window with night skyline (hidden while presenting) */}
               {slides.length === 0 && <div style={{
                 position: "absolute", top: 18, right: "8%",
@@ -687,18 +935,43 @@ export default function Victor() {
                   <span key={i} style={{
                     position: "absolute", width: 2, height: 2, borderRadius: 1,
                     background: ["#FFD98A", "#9FE0FF", "#FFF3C9"][i % 3],
-                    left: `${(i * 37) % 96 + 2}%`, top: `${40 + ((i * 23) % 55)}%`, opacity: 0.7,
+                    left: `${(i * 37) % 96 + 2}%`, top: `${40 + ((i * 23) % 55)}%`, opacity: 0.7, animation: `twinkle ${3 + (i % 5)}s ease-in-out ${i * 0.3}s infinite`,
                   }} />
                 ))}
                 {/* aurora shimmer nod to the company */}
                 <div style={{ position: "absolute", inset: 0, background: "linear-gradient(115deg,transparent 30%,rgba(95,208,140,0.10) 45%,rgba(79,209,224,0.10) 55%,rgba(139,127,214,0.10) 65%,transparent 80%)" }} />
               </div>}
 
+              {/* TALKING SCREEN: current speaker's portrait + caption (when not presenting slides) */}
+              {slides.length === 0 && spoken && spoken.said && (() => {
+                const c = SPEAKER_COLORS[spoken.who] || T.cyan;
+                const nm = spoken.who.charAt(0).toUpperCase() + spoken.who.slice(1);
+                return (
+                  <div style={{ position: "absolute", top: 14, left: "6%", width: "44%", maxWidth: 360, background: "rgba(9,14,20,0.92)", border: `1px solid ${c}55`, borderRadius: 10, padding: 12, boxShadow: `0 0 24px rgba(0,0,0,0.5)`, zIndex: 4 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                      <Avatar who={spoken.who} size={44} talking={true} />
+                      <div>
+                        <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, letterSpacing: 1.5, color: c, fontWeight: 600 }}>{nm.toUpperCase()}</div>
+                        <div style={{ fontSize: 9, color: T.muted, letterSpacing: 1 }}>{spoken.who === "margaret" ? "CFO" : spoken.who === "ronda" ? "OFFICE ADMIN" : "CEO"} · SPEAKING</div>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 12.5, lineHeight: 1.5, color: T.text, maxHeight: 92, overflowY: "auto" }}>{spoken.said}</div>
+                  </div>
+                );
+              })()}
+
               {/* carpet floor with perspective lines */}
               <div style={{
                 position: "absolute", bottom: 0, left: 0, right: 0, height: "48%",
                 background: "repeating-linear-gradient(90deg,#0b0f14 0px,#0b0f14 38px,#0d1219 39px,#0d1219 40px), linear-gradient(180deg,#0d1219 0%,#080b0f 100%)",
               }} />
+
+              {/* SCREEN GLOW SPILL — the TV throws light into the darkened room */}
+              {curSlide && (
+                <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 8, transition: "opacity .6s ease",
+                  background: `radial-gradient(60% 50% at 50% 34%, ${T.cyan}22 0%, ${T.cyan}0E 35%, transparent 70%)`,
+                  animation: "screenFlicker 4s ease-in-out infinite" }} />
+              )}
 
               {/* wall-mounted presentation TV */}
               {curSlide && (
@@ -723,9 +996,9 @@ export default function Victor() {
                     </div>
                     <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: T.cyanDim, flexShrink: 0 }}>{slideIdx + 1}/{slides.length}</span>
                   </div>
-                  {/* slide heading */}
+                  {/* slide heading (re-fades on slide change) */}
                   {curSlide.title && (
-                    <div style={{ fontSize: 13.5, fontWeight: 600, color: T.cyan, marginBottom: 8, lineHeight: 1.3, textShadow: `0 0 8px ${T.cyan}66` }}>{curSlide.title}</div>
+                    <div key={slideIdx} style={{ fontSize: 13.5, fontWeight: 600, color: T.cyan, marginBottom: 8, lineHeight: 1.3, textShadow: `0 0 8px ${T.cyan}66`, animation: "slideFade .45s ease-out" }}>{curSlide.title}</div>
                   )}
                   {/* points: revealed up to pointIdx, current one highlighted */}
                   {curSlide.points.map((p, i) => {
@@ -787,6 +1060,8 @@ export default function Victor() {
                     <div style={{ position: "absolute", inset: "34%", borderRadius: "50%", border: "1px solid rgba(255,225,180,0.18)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                       <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, letterSpacing: 3, color: "rgba(255,225,180,0.35)", transform: "rotateX(-58deg)" }}>AHD</span>
                     </div>
+                    {/* donut platter in the center */}
+                    <Platter />
                   </div>
                 </div>
               </div>
@@ -914,6 +1189,12 @@ export default function Victor() {
         *::-webkit-scrollbar{width:8px;height:8px}*::-webkit-scrollbar-thumb{background:${T.line};border-radius:8px}
         textarea:focus,input:focus{outline:none;border-color:${T.cyan}!important}
         @keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+        @keyframes steamRise { 0% { opacity: 0; transform: translateY(0) scaleX(1); } 30% { opacity: 0.5; } 100% { opacity: 0; transform: translateY(-14px) scaleX(1.6); } }
+        @keyframes sip { 0%,82%,100% { transform: translateY(0) rotate(0deg); } 88% { transform: translateY(-9px) rotate(-18deg); } 94% { transform: translateY(-9px) rotate(-18deg); } }
+        @keyframes twinkle { 0%,100% { opacity: 0.7; } 50% { opacity: 0.25; } }
+        @keyframes slideFade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+        @keyframes screenFlicker { 0%,100% { opacity: 1; } 48% { opacity: 0.92; } 52% { opacity: 0.97; } }
+        @keyframes spotPulse { 0%,100% { opacity: 0.5; } 50% { opacity: 0.72; } }
         @keyframes speakerGlow{0%,100%{box-shadow:0 0 14px currentColor,0 0 4px currentColor inset}50%{box-shadow:0 0 28px currentColor,0 0 8px currentColor inset}}
         @keyframes holoIn{0%{opacity:0;transform:translateY(-8px) scaleY(0.9)}100%{opacity:1;transform:translateY(0) scaleY(1)}}
         @keyframes presenterIn{0%{opacity:0;transform:translate(-50%,-50%) translateX(30px)}100%{opacity:1;transform:translate(-50%,-50%) translateX(0)}}
