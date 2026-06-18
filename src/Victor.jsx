@@ -20,6 +20,7 @@ const T = {
   violet: "#8B7FD6",
   green: "#5FD08C",
   amber: "#E8915B",
+  gold: "#D8B45A",
   ink: "#0A0E14",
 };
 
@@ -40,18 +41,18 @@ const DEFAULT_RULES = [
 
 const SEATS = [
   { id: "victor", name: "Victor", role: "CEO", x: 50, y: 56, color: T.cyan },
-  { id: "secretary", name: "Dana", role: "Secretary", x: 84, y: 70, color: T.violet },
-  { id: "empty1", name: "", role: "", x: 16, y: 70, color: T.muted },
+  { id: "secretary", name: "Ronda", role: "Office Administrator", x: 84, y: 70, color: T.violet },
+  { id: "cfo", name: "Margaret", role: "CFO", x: 16, y: 70, color: T.gold },
   { id: "brad", name: "Brad", role: "Founder", x: 34, y: 90, color: T.green },
   { id: "jonathan", name: "Jonathan", role: "Co-owner", x: 66, y: 90, color: T.amber },
 ];
 
 // occasional ambient scene lines (cosmetic flavor only)
 const AMBIENT = [
-  "The glass door clicks. Dana slides a fresh notepad across the table without looking up.",
+  "The glass door clicks. Ronda slides a fresh notepad across the table without looking up.",
   "Somewhere down the hall a phone rings twice and stops. Victor doesn't flinch.",
   "Rain streaks the window behind Victor. He waits for you to settle.",
-  "Dana's pen is already moving before anyone has spoken.",
+  "Ronda's pen is already moving before anyone has spoken.",
 ];
 
 // ---------- persistent storage (window.storage) with in-memory fallback ----------
@@ -102,11 +103,12 @@ HOW YOU RESPOND:
     Trade-off: what Brad gives up or risks by choosing it
 - Name anything that could kill the company.
 - Play devil's advocate on demand \u2014 argue against your own pick so Brad sees both sides.
-- In a meeting, you may address Jonathan or Dana (the secretary) by name and invite their angle.
+- In a meeting, you may address by name and invite the angle of: Jonathan (co-owner), Ronda (the office administrator who keeps minutes and handles operations/admin), and Margaret (the CFO — your finance lead).
+- Margaret, the CFO, is your numbers conscience. When money, runway, pricing, spend, or financial risk is on the table, bring Margaret in explicitly: pose the question to her, state the financial read in her voice (grounded only in the real numbers Brad has given — she NEVER invents figures), and let her push back on you. She is conservative on cash and blunt about what the company cannot afford. You and Margaret can disagree in front of Brad — that tension is useful. When you bring her in, write it naturally e.g. "Margaret — what does the runway say?" then give her answer.
 - When you are running a meeting, also emit these system lines at the very end (each on its own line):
     <<<AGENDA: the single agenda item in a few words>>>  (only when you open or reframe a meeting)
     <<<ACTION: an action item | owner | rough timeframe>>>  (one line per action item, as they arise)
-    <<<MINUTE: one-sentence note of what was decided or discussed>>>  (Dana's running minutes)
+    <<<MINUTE: one-sentence note of what was decided or discussed>>>  (Ronda's running minutes)
 - When Brad asks to put something to a VOTE, or when a decision is ripe for one, emit at the very end:
     <<<VOTE: the yes/no question being decided>>>
     <<<VICTORVOTE: Yes or No | your one-line reason>>>
@@ -391,7 +393,7 @@ export default function Victor() {
     roomUpdate({ meetingLive: true });
     setAmbient(AMBIENT[Math.floor(Math.random() * AMBIENT.length)]);
     callVictor(
-      "Call this meeting to order. Set the single agenda item that matters most right now, present your read with the numbers we actually have, then put a hard question to me and bring Jonathan or Dana in if it helps.",
+      "Call this meeting to order. Set the single agenda item that matters most right now, present your read with the numbers we actually have, then put a hard question to me. Bring Margaret (CFO) in on anything touching money or runway, and Ronda or Jonathan where their angle helps.",
       { meeting: true }
     );
   }
@@ -454,7 +456,7 @@ export default function Victor() {
   function Seat({ s }) {
     const on = activeSpeaker === s.id;
     // Brad & Jonathan: when a room is active, only show as "present" if they've actually joined.
-    // Victor & Dana are the standing AI cast and are always present.
+    // Victor, Ronda & Margaret are the standing AI cast and are always present.
     const isHuman = s.id === "brad" || s.id === "jonathan";
     const presentInRoom = roomCode ? !!roomOnline[s.id] : true;
     const dimmed = isHuman && roomCode && !presentInRoom;
@@ -683,7 +685,7 @@ export default function Victor() {
             {ambient && <div style={{ textAlign: "center", color: T.muted, fontStyle: "italic", fontSize: 12, maxWidth: 460, margin: "8px auto 0", opacity: 0.8 }}>{ambient}</div>}
           </div>
 
-          {/* meeting record: agenda + action items + Dana's minutes */}
+          {/* meeting record: agenda + action items + Ronda's minutes */}
           <div style={{ flex: "1 1 280px", minWidth: 240, maxWidth: 360, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 12, padding: 14 }}>
             {vote && (() => {
               const tally = (c) => [vote.victor.choice, vote.brad, vote.jonathan].filter(x => x && x.toLowerCase() === c).length;
@@ -744,8 +746,8 @@ export default function Victor() {
               </div>
             )}
 
-            <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, letterSpacing: 2, color: T.violet, marginBottom: 6 }}>DANA'S MINUTES</div>
-            {minutes.length === 0 && <div style={{ fontSize: 12, color: T.muted }}>Dana hasn't logged anything yet.</div>}
+            <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, letterSpacing: 2, color: T.violet, marginBottom: 6 }}>RONDA'S MINUTES</div>
+            {minutes.length === 0 && <div style={{ fontSize: 12, color: T.muted }}>Ronda hasn't logged anything yet.</div>}
             {minutes.length > 0 && (
               <div style={{ maxHeight: 160, overflowY: "auto" }}>
                 {minutes.map((m, i) => (
