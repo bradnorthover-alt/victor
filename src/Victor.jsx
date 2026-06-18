@@ -66,7 +66,7 @@ const store = {
   },
 };
 const K = { msgs: "victor:messages", rules: "victor:rules", state: "victor:companystate",
-  ledger: "victor:ledger", persona: "victor:persona", mode: "victor:mode", projects: "victor:projects" };
+  ledger: "victor:ledger", persona: "victor:persona", mode: "victor:mode", projects: "victor:projects", archive: "victor:archive" };
 
 // ---------- the system prompt that makes Victor, Victor ----------
 function buildSystem({ rules, companyState, mode, persona, ledger, projects }) {
@@ -203,6 +203,8 @@ export default function Victor() {
   const [panel, setPanel] = useState(null); // rules | ledger | state
   const [ambient, setAmbient] = useState("");
   const [agenda, setAgenda] = useState("");
+  const [meetingLive, setMeetingLive] = useState(false);
+  const [meetingArchive, setMeetingArchive] = useState([]);
   const [actions, setActions] = useState([]);
   const [minutes, setMinutes] = useState([]);
   const [deckTitle, setDeckTitle] = useState("");
@@ -232,12 +234,13 @@ export default function Victor() {
   // hydrate from storage once
   useEffect(() => {
     (async () => {
-      const [m, r, s, l, p, md, pr] = await Promise.all([
+      const [m, r, s, l, p, md, pr, ar] = await Promise.all([
         store.get(K.msgs), store.get(K.rules), store.get(K.state),
         store.get(K.ledger), store.get(K.persona), store.get(K.mode),
-        store.get(K.projects),
+        store.get(K.projects), store.get(K.archive),
       ]);
       if (m) try { setMessages(JSON.parse(m)); } catch {}
+      if (ar) try { setMeetingArchive(JSON.parse(ar)); } catch {}
       if (r) try { setRules(JSON.parse(r)); } catch {}
       if (s) setCompanyState(s);
       if (l) try { setLedger(JSON.parse(l)); } catch {}
@@ -257,6 +260,7 @@ export default function Victor() {
       if (d.members) setRoomOnline(d.members);
       if (d.memberNames) setRoomNames(d.memberNames);
       if (d.agenda !== undefined) setAgenda(d.agenda);
+      if (d.meetingLive !== undefined) setMeetingLive(d.meetingLive);
       if (d.actions) setActions(d.actions);
       if (d.minutes) setMinutes(d.minutes);
       if (d.slides) { setSlides(d.slides); setDeckTitle(d.deckTitle || ''); }
@@ -383,11 +387,36 @@ export default function Victor() {
 
   function callMeeting() {
     setView("boardroom");
+    setMeetingLive(true);
+    roomUpdate({ meetingLive: true });
     setAmbient(AMBIENT[Math.floor(Math.random() * AMBIENT.length)]);
     callVictor(
       "Call this meeting to order. Set the single agenda item that matters most right now, present your read with the numbers we actually have, then put a hard question to me and bring Jonathan or Dana in if it helps.",
       { meeting: true }
     );
+  }
+
+  function adjournMeeting() {
+    // Archive the meeting before clearing
+    if (agenda || minutes.length || actions.length) {
+      const record = {
+        when: Date.now(),
+        agenda: agenda || "(no agenda)",
+        actions: [...actions],
+        minutes: [...minutes],
+        decided: ledger.length ? ledger[ledger.length - 1] : null,
+      };
+      const archive = [...meetingArchive, record];
+      setMeetingArchive(archive);
+      store.set(K.archive, JSON.stringify(archive));
+    }
+    setMeetingLive(false);
+    setAgenda("");
+    setActions([]);
+    setMinutes([]);
+    setVote(null);
+    setSlides([]);
+    roomUpdate({ meetingLive: false, agenda: "", actions: [], minutes: [], vote: null, slides: [] });
   }
 
   // ----- deck navigation -----
@@ -505,6 +534,24 @@ export default function Victor() {
     const hasMeetingData = agenda || actions.length > 0 || minutes.length > 0;
     return (
       <div style={{ padding: "28px 18px 8px" }}>
+        {/* Meeting status bar */}
+        <div style={{ maxWidth: 1080, margin: "0 auto 16px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10,
+          padding: "10px 16px", borderRadius: 10,
+          background: meetingLive ? `${T.amber}14` : `${T.panel}`,
+          border: `1px solid ${meetingLive ? T.amber + "55" : T.lineSoft}` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ width: 9, height: 9, borderRadius: "50%", background: meetingLive ? T.amber : T.muted,
+              boxShadow: meetingLive ? `0 0 10px ${T.amber}` : "none", animation: meetingLive ? "speakerGlow 1.4s ease-in-out infinite" : "none", display: "inline-block" }} />
+            <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, letterSpacing: 1.5, color: meetingLive ? T.amber : T.muted }}>
+              {meetingLive ? "MEETING IN SESSION" : "BOARDROOM \u2014 NO MEETING IN SESSION"}
+            </span>
+          </div>
+          {meetingLive ? (
+            <button style={btn(false, T.amber)} onClick={adjournMeeting}>ADJOURN MEETING</button>
+          ) : (
+            <button style={btn(false, T.violet)} onClick={callMeeting} disabled={loading}>CALL MEETING TO ORDER</button>
+          )}
+        </div>
         <div style={{ display: "flex", gap: 18, alignItems: "flex-start", flexWrap: "wrap", justifyContent: "center" }}>
           <div style={{ flex: "1 1 360px", minWidth: 280 }}>
             {/* office meeting room */}
