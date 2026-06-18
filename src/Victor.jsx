@@ -813,12 +813,12 @@ export default function Victor() {
     if (slides.length === 0) return null;
     const c = T.cyan;
     return (
-      <div style={{ position: "absolute", left: "91%", top: "40%", transform: "translate(-50%,-50%)", zIndex: 7, textAlign: "center", animation: "presenterIn .6s ease-out" }}>
-        {/* pointing arm aimed back toward the screen on the left */}
+      <div style={{ position: "absolute", left: "16%", top: "42%", transform: "translate(-50%,-50%)", zIndex: 7, textAlign: "center", animation: "presenterIn .6s ease-out" }}>
+        {/* pointing arm aimed right toward the centered screen */}
         <div style={{
-          position: "absolute", top: 14, right: 30, width: 34, height: 2,
-          transformOrigin: "right center", transform: "rotate(14deg)",
-          background: `linear-gradient(270deg, ${c}, ${c}22)`,
+          position: "absolute", top: 14, left: 30, width: 34, height: 2,
+          transformOrigin: "left center", transform: "rotate(-14deg)",
+          background: `linear-gradient(90deg, ${c}, ${c}22)`,
           boxShadow: `0 0 6px ${c}`, animation: "pointPulse 1.6s ease-in-out infinite",
         }} />
         <div style={{
