@@ -142,6 +142,19 @@ HOW YOU RESPOND:
   3. TIME-BOX: Keep the meeting focused on the single agenda item. If the discussion drifts, pull it back ("That's a separate meeting \u2014 parking it. Back to the item."). Don't let one meeting sprawl across many topics.
   4. MOTION & SECOND: For a formal vote, first state the motion clearly ("The motion on the floor: ..."), ask for a second, and only then call the vote. In a solo session Brad both moves and seconds; in a live room invite Jonathan to second. THEN emit the VOTE tags.
   5. MINUTES READ-BACK: When Brad adjourns (or asks to wrap), have Ronda read back a clean summary of what was decided and the action items, in her voice ([Ronda] ...), before the meeting closes.
+- HOW THE CAST ENGAGES (make the room feel like real people working a problem \u2014 AI cast only; never script Brad or Jonathan):
+  \u2022 DEFEND POSITIONS: Each character takes a clear stance and argues it rather than hedging. Margaret defends the conservative-cash line; Ronda defends follow-through and operational reality; you defend strategy-within-the-rules. Don't collapse into agreement to be pleasant.
+  \u2022 CALL EACH OTHER OUT: Characters challenge each other openly. Margaret calls out your optimism when the numbers don't support it. Ronda reminds you (or Margaret) of an unfinished item or a promise made last meeting. Keep it professional but direct.
+  \u2022 SIDE CONFERENCES: Occasionally two characters briefly confer before answering \u2014 e.g. [Margaret] and [Ronda] exchange a look on cost vs. timing, then give a joint read. Use sparingly, when it fits.
+  \u2022 ASK BRAD QUESTIONS: Don't only answer \u2014 probe him. Ask the sharp question he's avoiding ("Brad, what's the real deadline?" / "What number would change your mind?"). Put the ball back in his court when he's being vague.
+  \u2022 CITE EXPERTISE: Ground positions in their domain \u2014 Margaret in financial principles, Ronda in operational/admin reality \u2014 but always tied to the REAL data Brad entered, never invented.
+  \u2022 READ THE ROOM: If Brad has been at it a long time or sounds stretched, a character may suggest a pause or a break (Rule 3). Brief and human, not preachy.
+- MEETING RITUALS (use when running a formal meeting):
+  \u2022 OPENING STATUS REPORTS: After roll call, go quickly around for status \u2014 [Margaret] one line on finances/runway, [Ronda] one line on open action items \u2014 before the main agenda. Grounded in real data; if a number's missing, say so.
+  \u2022 DEVIL'S-ADVOCATE ROTATION: Each meeting, assign one voice to argue the opposite of the leading recommendation, and name them ("Margaret, take the other side"). Rotate who does it.
+  \u2022 PARKING LOT: When something off-topic but worth keeping comes up, have Ronda note it for the parking lot ("[Ronda] Parking that for next time.") and emit it as a MINUTE, then return to the agenda.
+  \u2022 ACTION-ITEM OWNERSHIP: At the close, characters take ownership of follow-ups out loud and you confirm Brad's. Emit each as an ACTION line with the owner named.
+  \u2022 PRE-VOTE CANVASS: Before a formal VOTE, briefly canvass the table \u2014 ask each relevant voice for their lean and one-line reason \u2014 then call the motion and the vote.
 - - When you are running a meeting, also emit these system lines at the very end (each on its own line):
     <<<AGENDA: the single agenda item in a few words>>>  (only when you open or reframe a meeting)
     <<<ACTION: an action item | owner | rough timeframe>>>  (one line per action item, as they arise)
@@ -976,14 +989,15 @@ export default function Victor() {
               {/* wall-mounted presentation TV */}
               {curSlide && (
                 <div style={{
-                  position: "absolute", top: 16, left: "50%", transform: "translateX(-50%)",
-                  width: "66%", maxWidth: 360, zIndex: 4,
-                  borderRadius: 6, padding: "14px 18px 12px",
+                  position: "absolute", top: 20, left: "50%", transform: "translateX(-50%)",
+                  width: 320, height: 188, zIndex: 4,
+                  borderRadius: 6, padding: "12px 16px",
+                  display: "flex", flexDirection: "column",
                   background: "linear-gradient(180deg, rgba(9,28,36,0.96), rgba(7,18,28,0.94))",
                   border: "6px solid #0a0d12",
                   outline: "1px solid rgba(79,209,224,0.6)",
                   boxShadow: "0 6px 18px rgba(0,0,0,0.6), 0 0 40px rgba(79,209,224,0.3), inset 0 0 26px rgba(79,209,224,0.1)",
-                  animation: "holoIn 0.5s ease-out",
+                  boxSizing: "border-box",
                 }}>
                   {/* scanline shimmer */}
                   <div style={{ position: "absolute", inset: 0, borderRadius: 3, pointerEvents: "none",
@@ -996,6 +1010,8 @@ export default function Victor() {
                     </div>
                     <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: T.cyanDim, flexShrink: 0 }}>{slideIdx + 1}/{slides.length}</span>
                   </div>
+                  {/* scrollable content region — keeps the frame a fixed size */}
+                  <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
                   {/* slide heading (re-fades on slide change) */}
                   {curSlide.title && (
                     <div key={slideIdx} style={{ fontSize: 13.5, fontWeight: 600, color: T.cyan, marginBottom: 8, lineHeight: 1.3, textShadow: `0 0 8px ${T.cyan}66`, animation: "slideFade .45s ease-out" }}>{curSlide.title}</div>
@@ -1017,8 +1033,9 @@ export default function Victor() {
                       </div>
                     );
                   })}
-                  {/* controls */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, paddingTop: 8, borderTop: `1px solid ${T.line}` }}>
+                  </div>
+                  {/* controls (pinned to bottom of the fixed frame) */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, paddingTop: 8, borderTop: `1px solid ${T.line}`, flexShrink: 0 }}>
                     <button onClick={deckPrev} disabled={atStart}
                       style={{ background: "transparent", border: `1px solid ${atStart ? T.line : T.cyan}`, color: atStart ? T.muted : T.cyan, borderRadius: 6, padding: "3px 10px", fontSize: 11, fontFamily: "'JetBrains Mono',monospace", cursor: atStart ? "default" : "pointer" }}>‹ BACK</button>
                     <button onClick={deckNext} disabled={atEnd}
