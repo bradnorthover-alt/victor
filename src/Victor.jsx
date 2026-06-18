@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { db } from './firebase'
+import { doc, onSnapshot, setDoc, updateDoc, getDoc } from 'firebase/firestore'
 
 // ============================================================
 // VICTOR — Acting CEO, Aurora Horizon Digital
@@ -210,6 +212,13 @@ export default function Victor() {
   const [slideIdx, setSlideIdx] = useState(0);
   const [pointIdx, setPointIdx] = useState(1);   // how many points revealed on current slide
   const [vote, setVote] = useState(null);  // {question, victor:{choice,reason}, brad:choice|null, jonathan:'pending'|choice}
+  // --- Room state (Milestone 2: shared live meeting) ---
+  const [roomCode, setRoomCode] = useState('');
+  const [myRole, setMyRole] = useState(null); // 'brad' or 'jonathan'
+  const [roomOnline, setRoomOnline] = useState({});
+  const [roomInput, setRoomInput] = useState('');
+  const [roomCreating, setRoomCreating] = useState(false);
+
   const [speaking, setSpeaking] = useState(false);
 
   const scrollRef = useRef(null);
@@ -237,6 +246,66 @@ export default function Victor() {
       if (pr) try { setProjects(JSON.parse(pr)); } catch {}
     })();
   }, []);
+
+
+  // --- Firestore room sync ---
+  useEffect(() => {
+    if (!roomCode) return;
+    const unsub = onSnapshot(doc(db, 'rooms', roomCode), (snap) => {
+      if (!snap.exists()) return;
+      const d = snap.data();
+      if (d.members) setRoomOnline(d.members);
+      if (d.agenda !== undefined) setAgenda(d.agenda);
+      if (d.actions) setActions(d.actions);
+      if (d.minutes) setMinutes(d.minutes);
+      if (d.slides) { setSlides(d.slides); setDeckTitle(d.deckTitle || ''); }
+      if (d.slideIdx !== undefined) setSlideIdx(d.slideIdx);
+      if (d.pointIdx !== undefined) setPointIdx(d.pointIdx);
+      if (d.vote !== undefined) setVote(d.vote);
+    });
+    return () => unsub();
+  }, [roomCode]);
+
+  async function roomUpdate(data) {
+    if (!roomCode) return;
+    try { await updateDoc(doc(db, 'rooms', roomCode), data); } catch(e) {}
+  }
+
+  async function createRoom() {
+    setRoomCreating(true);
+    const code = String(Math.floor(1000 + Math.random() * 9000));
+    await setDoc(doc(db, 'rooms', code), {
+      code, created: Date.now(),
+      members: { brad: true, jonathan: false },
+      agenda: '', actions: [], minutes: [],
+      slides: [], slideIdx: 0, pointIdx: 1,
+      deckTitle: '', vote: null,
+    });
+    await updateDoc(doc(db, 'rooms', code), { 'members.brad': true });
+    setRoomCode(code);
+    setMyRole('brad');
+    setRoomCreating(false);
+    setPanel(null);
+  }
+
+  async function joinRoom(code) {
+    try {
+      const snap = await getDoc(doc(db, 'rooms', code));
+      if (!snap.exists()) { alert('Room not found. Check the code.'); return; }
+      await updateDoc(doc(db, 'rooms', code), { 'members.jonathan': true });
+      setRoomCode(code);
+      setMyRole('jonathan');
+      setPanel(null);
+      setView('boardroom');
+    } catch(e) { alert('Could not join room: ' + e.message); }
+  }
+
+  function leaveRoom() {
+    if (roomCode) {
+      try { updateDoc(doc(db, 'rooms', roomCode), { [`members.${myRole}`]: false }); } catch(e) {}
+    }
+    setRoomCode(''); setMyRole(null); setRoomOnline({});
+  }
 
   useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [messages, loading]);
 
@@ -321,12 +390,12 @@ export default function Victor() {
   const curSlide = slides[slideIdx] || null;
   function deckNext() {
     if (!curSlide) return;
-    if (pointIdx < curSlide.points.length) { setPointIdx(pointIdx + 1); return; }
-    if (slideIdx < slides.length - 1) { setSlideIdx(slideIdx + 1); setPointIdx(1); }
+    if (pointIdx < curSlide.points.length) { const np=pointIdx+1; setPointIdx(np); roomUpdate({pointIdx:np}); return; }
+    if (slideIdx < slides.length - 1) { const ns=slideIdx+1; setSlideIdx(ns); setPointIdx(1); roomUpdate({slideIdx:ns,pointIdx:1}); }
   }
   function deckPrev() {
-    if (pointIdx > 1) { setPointIdx(pointIdx - 1); return; }
-    if (slideIdx > 0) { const ns = slideIdx - 1; setSlideIdx(ns); setPointIdx(slides[ns].points.length); }
+    if (pointIdx > 1) { const np=pointIdx-1; setPointIdx(np); roomUpdate({pointIdx:np}); return; }
+    if (slideIdx > 0) { const ns = slideIdx - 1; const np=slides[ns].points.length; setSlideIdx(ns); setPointIdx(np); roomUpdate({slideIdx:ns,pointIdx:np}); }
   }
   function deckClose() { setSlides([]); setDeckTitle(""); setSlideIdx(0); setPointIdx(1); }
   const atEnd = curSlide && slideIdx === slides.length - 1 && pointIdx >= curSlide.points.length;
@@ -582,9 +651,9 @@ export default function Victor() {
                   <div style={{ fontSize: 13, color: T.text, marginBottom: 10, lineHeight: 1.4 }}>{vote.question}</div>
                   <Voter name="Victor" color={T.cyan} choice={vote.victor.choice} />
                   {vote.victor.reason && <div style={{ fontSize: 11, color: T.muted, fontStyle: "italic", margin: "-2px 0 8px 26px", lineHeight: 1.4 }}>{vote.victor.reason}</div>}
-                  <Voter name="Brad" color={T.green} choice={vote.brad} onYes={() => setVote({ ...vote, brad: "Yes" })} onNo={() => setVote({ ...vote, brad: "No" })} />
+                  <Voter name="Brad" color={T.green} choice={vote.brad} onYes={() => { const v={...vote,brad:"Yes"}; setVote(v); roomUpdate({vote:v}); }} onNo={() => { const v={...vote,brad:"No"}; setVote(v); roomUpdate({vote:v}); }} />
                   <Voter name="Jonathan" color={T.amber} choice={vote.jonathan === "pending" ? null : vote.jonathan}
-                    onYes={() => setVote({ ...vote, jonathan: "Yes" })} onNo={() => setVote({ ...vote, jonathan: "No" })} />
+                    onYes={() => { const v={...vote,jonathan:"Yes"}; setVote(v); roomUpdate({vote:v}); }} onNo={() => { const v={...vote,jonathan:"No"}; setVote(v); roomUpdate({vote:v}); }} />
                   {vote.jonathan === "pending" && <div style={{ fontSize: 10, color: T.muted, margin: "-2px 0 8px 26px", lineHeight: 1.4 }}>Awaiting Jonathan's real vote — enter it when you have it.</div>}
                   <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
                     <span style={{ fontSize: 12, color: T.green, fontFamily: "'JetBrains Mono',monospace" }}>YES {yes}</span>
@@ -674,6 +743,9 @@ export default function Victor() {
         <button style={btn(panel === "rules")} onClick={() => setPanel(panel === "rules" ? null : "rules")}>RULES</button>
         <button style={btn(panel === "ledger")} onClick={() => setPanel(panel === "ledger" ? null : "ledger")}>LEDGER</button>
         <button style={btn(voiceOn, T.green)} onClick={() => { setVoiceOn(v => !v); if (voiceOn && window.speechSynthesis) window.speechSynthesis.cancel(); }}>VOICE {voiceOn ? "ON" : "OFF"}</button>
+        <button style={btn(panel === "room", roomCode ? T.green : T.muted)} onClick={() => setPanel(panel === "room" ? null : "room")}>
+          {roomCode ? `ROOM ${roomCode}` : "JOIN / START"}
+        </button>
       </div>
 
       <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
@@ -813,6 +885,45 @@ export default function Victor() {
               </div>
             )}
 
+
+            {panel === "room" && (
+              <div>
+                <div style={{ fontFamily:"'JetBrains Mono',monospace", letterSpacing:2, color: T.cyan, fontSize:13, marginBottom:16 }}>
+                  {roomCode ? `ACTIVE ROOM: ${roomCode}` : "START OR JOIN A ROOM"}
+                </div>
+                {!roomCode ? (
+                  <div>
+                    <div style={{ fontSize:12, color:T.muted, lineHeight:1.5, marginBottom:16 }}>
+                      Start a room and share the 4-digit code with Jonathan. He enters it on his phone at <strong style={{color:T.cyan}}>victor-ceo.vercel.app</strong> to join the same live meeting.
+                    </div>
+                    <button style={{ ...btn(false, T.green), width:"100%", marginBottom:16, padding:"12px" }} onClick={createRoom} disabled={roomCreating}>
+                      {roomCreating ? "CREATING..." : "START A ROOM (GET CODE)"}
+                    </button>
+                    <div style={{ borderTop:`1px solid ${T.lineSoft}`, paddingTop:16, marginBottom:8 }}>
+                      <div style={{ fontSize:12, color:T.muted, marginBottom:8 }}>Or enter a code to join:</div>
+                      <div style={{ display:"flex", gap:8 }}>
+                        <input value={roomInput} onChange={e => setRoomInput(e.target.value.replace(/\D/g,'').slice(0,4))}
+                          placeholder="4-digit code" maxLength={4}
+                          style={{ flex:1, background:T.panel, color:T.text, border:`1px solid ${T.line}`, borderRadius:8, padding:"8px 10px", fontSize:14, fontFamily:"'JetBrains Mono',monospace", letterSpacing:4 }} />
+                        <button style={btn(false, T.cyan)} onClick={() => joinRoom(roomInput)} disabled={roomInput.length < 4}>JOIN</button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <div style={{ background:`${T.green}14`, border:`1px solid ${T.green}55`, borderRadius:10, padding:16, marginBottom:16, textAlign:"center" }}>
+                      <div style={{ fontSize:12, color:T.muted, marginBottom:4 }}>Share this code with Jonathan</div>
+                      <div style={{ fontSize:40, fontFamily:"'JetBrains Mono',monospace", color:T.green, letterSpacing:8, fontWeight:700 }}>{roomCode}</div>
+                      <div style={{ fontSize:11, color:T.muted, marginTop:4 }}>victor-ceo.vercel.app</div>
+                    </div>
+                    <div style={{ fontSize:12, color:T.muted, marginBottom:16, lineHeight:1.5 }}>
+                      Once Jonathan joins, the meeting agenda, slides, and voting sync between your screens in real time. His vote appears the moment he taps it.
+                    </div>
+                    <button style={{ ...btn(false, T.amber), width:"100%" }} onClick={() => { leaveRoom(); setPanel(null); }}>LEAVE ROOM</button>
+                  </div>
+                )}
+              </div>
+            )}
             {panel === "ledger" && (
               <div>
                 <div style={{ fontSize: 12, color: T.muted, marginBottom: 12, lineHeight: 1.5 }}>Decisions you commit to in conversation land here. Victor remembers them and holds you to them.</div>
