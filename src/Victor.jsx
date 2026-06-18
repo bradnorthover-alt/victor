@@ -443,10 +443,12 @@ export default function Victor() {
   // ----- styles -----
   const wrap = { background: T.bg, color: T.text, minHeight: "100vh", fontFamily: "'Space Grotesk','Inter',system-ui,sans-serif", display: "flex", flexDirection: "column" };
   const btn = (active, c = T.cyan) => ({
-    background: active ? `${c}1A` : "transparent", color: active ? c : T.muted,
+    background: active ? `${c}2E` : "transparent", color: active ? c : T.muted,
     border: `1px solid ${active ? c : T.line}`, borderRadius: 8, padding: "7px 12px",
     fontSize: 12, letterSpacing: 0.4, cursor: "pointer", fontFamily: "'JetBrains Mono',monospace",
     transition: "all .15s", whiteSpace: "nowrap",
+    fontWeight: active ? 600 : 400,
+    boxShadow: active ? `0 0 12px ${c}55, 0 0 2px ${c} inset` : "none",
   });
 
   function Seat({ s }) {
@@ -794,7 +796,9 @@ export default function Victor() {
       <div style={{ display: "flex", gap: 8, padding: "10px 14px", borderBottom: `1px solid ${T.lineSoft}`, flexWrap: "wrap", alignItems: "center" }}>
         <button style={btn(view === "console")} onClick={() => setView("console")}>CONSOLE</button>
         <button style={btn(view === "boardroom")} onClick={() => setView("boardroom")}>BOARDROOM</button>
-        <button style={btn(false, T.violet)} onClick={callMeeting} disabled={loading}>CALL A MEETING</button>
+        <button style={btn(meetingLive, T.violet)} onClick={() => { if (meetingLive) { setView("boardroom"); } else { callMeeting(); } }} disabled={loading}>
+          {meetingLive ? "MEETING LIVE" : "CALL A MEETING"}
+        </button>
         <div style={{ flex: 1 }} />
         <button style={btn(panel === "state")} onClick={() => setPanel(panel === "state" ? null : "state")}>DATA</button>
         <button style={btn(panel === "projects")} onClick={() => setPanel(panel === "projects" ? null : "projects")}>PROJECTS</button>
