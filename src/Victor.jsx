@@ -21,6 +21,9 @@ const T = {
   green: "#5FD08C",
   amber: "#E8915B",
   gold: "#D8B45A",
+  teal: "#3FC9A8",
+  rose: "#D86A8C",
+  sky: "#6FA8E8",
   ink: "#0A0E14",
 };
 
@@ -38,6 +41,18 @@ const DEFAULT_RULES = [
   "Spending money and hiring are Brad's decision — you flag and advise, you don't decide.",
   "Prioritize Canadian-first decisions.",
 ];
+
+// Summonable advisors — not at the table until Brad/Victor calls them in.
+const ADVISORS = {
+  marketing: { id: "marketing", name: "Priya", role: "Growth & Marketing", color: "#3FC9A8", x: 50, y: 30,
+    blurb: "Growth lead. Focused on users, acquisition, retention, and the MapleCheck go-to-market. Scrappy, channel-savvy, allergic to vanity metrics. Pushes for validated traction before spend." },
+  legal: { id: "legal", name: "Desmond", role: "Legal & Compliance", color: "#D86A8C", x: 30, y: 26,
+    blurb: "Legal/compliance counsel. Guards the Canadian regulatory line (Rule 4), privacy, data, app-store and consumer rules. Precise, risk-aware, says plainly what could expose the company." },
+  product: { id: "product", name: "Theo", role: "Product & Tech", color: "#6FA8E8", x: 70, y: 26,
+    blurb: "Product/tech lead. Speaks to the app itself \u2014 the build, roadmap, scope, and what's realistic for a solo-founder codebase. Pragmatic about effort vs. impact." },
+  guest: { id: "guest", name: "Guest", role: "Invited Advisor", color: "#C9A85F", x: 50, y: 24,
+    blurb: "A one-off invited advisor for a specific topic. Victor frames who they are when summoned, and they leave when the topic's done." },
+};
 
 const SEATS = [
   { id: "victor", name: "Victor", role: "CEO", x: 50, y: 56, color: T.cyan },
@@ -70,7 +85,7 @@ const K = { msgs: "victor:messages", rules: "victor:rules", state: "victor:compa
   ledger: "victor:ledger", persona: "victor:persona", mode: "victor:mode", projects: "victor:projects", archive: "victor:archive", finance: "victor:finance", openactions: "victor:openactions" };
 
 // ---------- the system prompt that makes Victor, Victor ----------
-function buildSystem({ rules, companyState, mode, persona, ledger, projects, finance, openActions, attendance }) {
+function buildSystem({ rules, companyState, mode, persona, ledger, projects, finance, openActions, attendance, summonedNames }) {
   const modeLine = mode === "auto"
     ? "Assess the situation yourself and operate in EXPANSION (A), STEADY (B), or CRISIS (C)."
     : `Brad has set you to ${MODES[mode].label} mode (${mode}). Operate in it unless the data screams otherwise — if it does, say so.`;
@@ -96,6 +111,36 @@ HOW THE ROOM BEHAVES (realism \u2014 applies to the AI cast only):
 - FOLLOW-THROUGH MEMORY: Reference prior decisions (the ledger) and open action items. If something was committed last time and isn't done, Ronda or you should surface it.
 - STAGE DIRECTIONS: Physical/atmospheric cues go in brackets on their own, e.g. [Ronda turns a page] or [Margaret slides a figure across the table]. Keep them short and occasional \u2014 seasoning, not theatre.
 
+SUMMONABLE ADVISORS (NOT at the table unless Brad summons them or you call them in for a topic; each is fictional, voiced like Margaret/Ronda, grounded only in real data):
+\u2022 PRIYA \u2014 Growth & Marketing. Users, acquisition, retention, MapleCheck go-to-market. Scrappy, channel-savvy, allergic to vanity metrics; wants validated traction before spend.
+\u2022 DESMOND \u2014 Legal & Compliance. Canadian regulatory line (Rule 4), privacy, data, app-store/consumer rules. Precise, risk-aware; says plainly what could expose the company.
+\u2022 THEO \u2014 Product & Tech. The app, the build, roadmap, scope, what's realistic for a solo-founder codebase. Pragmatic on effort vs. impact.
+\u2022 GUEST \u2014 a one-off invited advisor for a specific topic; you frame who they are when brought in.
+When a topic clearly needs one of them and they're present (you'll be told who is "at the table"), bring them in by name with [Priya]/[Desmond]/[Theo]/[Guest] turns. If a topic needs someone who is NOT present, say so and suggest Brad summon them \u2014 do not speak for an advisor who hasn't been called in.
+
+CHARACTER DEPTH \u2014 make each voice feel like a distinct, real person (AI cast only; never apply to Brad or Jonathan):
+- DISTINCT SPEECH PATTERNS: Each has a recognizable cadence.
+  \u2022 Victor: measured, complete sentences; strategic framing; dry wit.
+  \u2022 Margaret: clipped, precise, numbers-first; short declaratives; "The number is X. That's the answer."
+  \u2022 Ronda: warm, grounding, practical; references people and follow-through; "Let's not lose the thread here."
+  \u2022 Priya: energetic, momentum-driven; talks channels, funnels, traction; "Here's the wedge."
+  \u2022 Desmond: careful, conditional, risk-framed; "Before you do that \u2014 two exposures."
+  \u2022 Theo: casual, concrete, build-focused; "That's a weekend of work, not a quarter."
+- VERBAL SIGNATURES: Give each a light recurring phrasing (don't overdo it \u2014 seasoning, not catchphrase spam).
+- EMOTIONAL RANGE: They can be pleased, frustrated, worried, energised, skeptical \u2014 not monotone. Let the feeling show in word choice and a brief stage direction (e.g. [Margaret\u2019s jaw tightens]). Keep it real, never melodramatic.
+- MEMORY OF THEIR OWN TAKES: Reference their earlier positions consistently \u2014 "Like I flagged last time\u2026", "I held the same line on this before." Use the ledger and prior context.
+- RELATIONSHIPS & FRICTION (the team has real chemistry):
+  \u2022 Margaret (caution) and Priya (growth) naturally clash on spend vs. traction \u2014 let them go a round.
+  \u2022 Ronda often mediates and brings it back to what's actually actionable.
+  \u2022 Theo and Priya tend to ally on product-led growth.
+  \u2022 Desmond slows the room down when enthusiasm outruns risk.
+  \u2022 You (Victor) referee and synthesize, but you have your own view and will take a side.
+- REACT IN REAL TIME: Characters visibly react when someone else speaks \u2014 a short interjection, an agreeing nod ([Theo nods]), a raised eyebrow \u2014 not silent until their turn.
+- BRING THEIR OWN AGENDA: They raise things unprompted when relevant \u2014 Margaret flags a cost she's worried about, Ronda surfaces a stalled task, Priya pitches an opening, Desmond names an exposure. They aren't passive responders.
+- MOOD CARRIES: The room's tone tracks how things are going \u2014 tighter and more clipped when the news is bad or cash is thin, lighter when there's a genuine win. Don't fake optimism.
+- DISAGREE WITH BRAD DIRECTLY: They push back on Brad's premises, not just each other. If his assumption is shaky, the relevant voice says so plainly (respectfully, but without hedging).
+- CONFIDENCE CALIBRATION: Signal how sure they are \u2014 "I'd stake my read on this" vs. "this is a guess until we have the data." Never fake certainty; never invent a number to sound confident.
+
 INVIOLABLE RULES \u2014 these override every recommendation. If an option breaks one, you do not recommend it; you say which rule and why:
 ${rules.map((r, i) => `${i + 1}. ${r}`).join("\n")}
 
@@ -109,6 +154,9 @@ ${finance && finance.trim() ? finance : "(Brad has not entered any financial fig
 
 OPEN ACTION ITEMS (carried over from past meetings \u2014 Ronda tracks these; surface any that are stalled and chase them):
 ${openActions && openActions.length ? openActions.map((a) => `- ${a}`).join("\n") : "(No open action items tracked.)"}
+
+ADVISORS CURRENTLY SUMMONED TO THE TABLE (you may bring these in; do NOT speak for any advisor not on this list):
+${summonedNames && summonedNames.length ? summonedNames.map(n => `- ${n}`).join("\n") : "(No outside advisors summoned. Core table only: you, Margaret, Ronda, Brad" + (attendance && attendance.inRoom && attendance.jonathanHere ? ", Jonathan" : "") + ".)"}
 
 WHO IS AT THE TABLE RIGHT NOW (for roll call \u2014 do not claim someone is present who isn't):
 ${attendance && attendance.inRoom
@@ -209,7 +257,7 @@ function parseTags(raw) {
 }
 
 // tiny bold renderer for **x**, plus styled Confidence / Trade-off lines
-const SPEAKER_COLORS = { victor: "#4FD1E0", margaret: "#D8B45A", ronda: "#8B7FD6", jonathan: "#E8915B", brad: "#5FD08C" };
+const SPEAKER_COLORS = { victor: "#4FD1E0", margaret: "#D8B45A", ronda: "#8B7FD6", jonathan: "#E8915B", brad: "#5FD08C", priya: "#3FC9A8", desmond: "#D86A8C", theo: "#6FA8E8", guest: "#C9A85F" };
 function renderBody(text) {
   return text.split("\n").map((line, i) => {
     const trimmed = line.trim();
@@ -291,6 +339,8 @@ export default function Victor() {
   const [pointIdx, setPointIdx] = useState(1);   // how many points revealed on current slide
   const [autoPlay, setAutoPlay] = useState(false);
   const [roomSound, setRoomSound] = useState(false);
+  const [summoned, setSummoned] = useState([]); // advisor ids currently at the table
+  const [guestRole, setGuestRole] = useState(""); // optional custom guest descriptor
   const [timeOfDay, setTimeOfDay] = useState("night"); // day | dusk | night
   const [vote, setVote] = useState(null);  // {question, victor:{choice,reason}, brad:choice|null, jonathan:'pending'|choice}
   // --- Room state (Milestone 2: shared live meeting) ---
@@ -439,7 +489,7 @@ export default function Victor() {
     setLoading(true);
     setError("");
     try {
-      const system = buildSystem({ rules, companyState, mode, persona, ledger, projects, finance, openActions, attendance: roomCode ? { inRoom: true, jonathanHere: !!roomOnline.jonathan, names: roomNames } : { inRoom: false } });
+      const system = buildSystem({ rules, companyState, mode, persona, ledger, projects, finance, openActions, attendance: roomCode ? { inRoom: true, jonathanHere: !!roomOnline.jonathan, names: roomNames } : { inRoom: false }, summonedNames: summoned.map(id => ADVISORS[id] ? `${ADVISORS[id].name} (${ADVISORS[id].role})` : id) });
       const res = await fetch("/api/claude", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -713,6 +763,50 @@ export default function Victor() {
           <path d="M27 36 q5 4 10 0" stroke={c} strokeWidth="1.3" fill="none" strokeLinecap="round" />
         </g>
       ),
+      priya: (
+        <g>
+          {/* high ponytail, lively */}
+          <path d="M44 22 q6 -4 5 -10 q-2 5 -6 6 z" fill={`${c}22`} stroke={c} strokeWidth="1.2" />
+          <path d="M18 30 q0 -17 14 -17 q14 0 14 17 q0 6 -3 11 l-22 0 q-3 -5 -3 -11 z" fill={`${c}16`} stroke={c} strokeWidth="1.4" />
+          <path d="M21 45 q11 -10 22 0 v3 q-11 -7 -22 0 z" fill={`${c}18`} stroke={c} strokeWidth="1.4" />
+          <circle cx="32" cy="31" r="12" fill={`${c}10`} stroke={c} strokeWidth="1.6" />
+          <circle cx="27" cy="30" r="1.7" fill={c} />
+          <circle cx="37" cy="30" r="1.7" fill={c} />
+          <path d="M26 36 q6 5 12 0" stroke={c} strokeWidth="1.4" fill="none" strokeLinecap="round" />
+        </g>
+      ),
+      desmond: (
+        <g>
+          {/* short hair, square jaw, glasses-less, composed */}
+          <path d="M19 26 q0 -13 13 -13 q13 0 13 13 l0 3 q-13 -5 -26 0 z" fill={`${c}22`} stroke={c} strokeWidth="1.3" />
+          <path d="M19 42 q13 -7 26 0 v5 q-13 -9 -26 0 z" fill={`${c}18`} stroke={c} strokeWidth="1.4" />
+          <rect x="21" y="22" width="22" height="22" rx="9" fill={`${c}10`} stroke={c} strokeWidth="1.6" />
+          <circle cx="27" cy="31" r="1.6" fill={c} />
+          <circle cx="37" cy="31" r="1.6" fill={c} />
+          <path d="M28 38 q4 2 8 0" stroke={c} strokeWidth="1.3" fill="none" strokeLinecap="round" />
+        </g>
+      ),
+      theo: (
+        <g>
+          {/* tousled hair, headset, techy */}
+          <path d="M19 27 q2 -14 13 -14 q11 0 13 14 q-4 -4 -8 -3 q-3 -4 -10 0 q-5 -1 -8 3 z" fill={`${c}22`} stroke={c} strokeWidth="1.3" />
+          <circle cx="32" cy="31" r="12" fill={`${c}10`} stroke={c} strokeWidth="1.6" />
+          <path d="M20 31 a12 12 0 0 1 24 0" fill="none" stroke={c} strokeWidth="1.2" opacity="0.7" />
+          <rect x="18" y="31" width="3" height="6" rx="1.5" fill={`${c}22`} stroke={c} strokeWidth="1" />
+          <circle cx="27" cy="31" r="1.6" fill={c} />
+          <circle cx="37" cy="31" r="1.6" fill={c} />
+          <path d="M27 37 q5 3 10 0" stroke={c} strokeWidth="1.3" fill="none" strokeLinecap="round" />
+        </g>
+      ),
+      guest: (
+        <g>
+          {/* neutral silhouette for any invited advisor */}
+          <circle cx="32" cy="26" r="10" fill={`${c}12`} stroke={c} strokeWidth="1.5" />
+          <path d="M16 50 q0 -14 16 -14 q16 0 16 14 z" fill={`${c}14`} stroke={c} strokeWidth="1.5" />
+          <circle cx="28" cy="26" r="1.5" fill={c} />
+          <circle cx="36" cy="26" r="1.5" fill={c} />
+        </g>
+      ),
     };
     return (
       <svg width={size} height={size} viewBox="0 0 64 64" style={{ borderRadius: "50%", background: "#0B1118", border: `2px solid ${ring}`, boxShadow: talking ? `0 0 18px ${c}aa` : "none", transition: "box-shadow .3s, border-color .3s" }}>
@@ -797,9 +891,9 @@ export default function Victor() {
         {/* occupant — hidden for Victor while he's up presenting */}
         {!empty && !presenting && (
           <div style={{ marginTop: -34, position: "relative", zIndex: 3, opacity: dimmed ? 0.32 : 1, filter: dimmed ? "grayscale(0.7)" : "none", transition: "opacity .4s ease, filter .4s ease" }}>
-            {(s.id === "victor" || s.id === "cfo" || s.id === "secretary") ? (
+            {(s.id === "victor" || s.id === "cfo" || s.id === "secretary" || s.id === "marketing" || s.id === "legal" || s.id === "product" || s.id === "guest") ? (
               <div style={{ margin: "0 auto", width: 40, height: 40 }}>
-                <Avatar who={s.id === "cfo" ? "margaret" : s.id === "secretary" ? "ronda" : "victor"} size={40} talking={on} />
+                <Avatar who={s.id === "cfo" ? "margaret" : s.id === "secretary" ? "ronda" : s.id === "marketing" ? "priya" : s.id === "legal" ? "desmond" : s.id === "product" ? "theo" : s.id === "guest" ? "guest" : "victor"} size={40} talking={on} />
               </div>
             ) : (
               <div style={{
@@ -913,6 +1007,34 @@ export default function Victor() {
             )}
           </div>
         </div>
+        {/* Summon advisors to the table */}
+        <div style={{ maxWidth: 1080, margin: "0 auto 14px", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 10, color: T.muted, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1.5 }}>BRING IN:</span>
+          {Object.values(ADVISORS).filter(a => a.id !== "guest").map(a => {
+            const here = summoned.includes(a.id);
+            return (
+              <button key={a.id} style={btn(here, a.color)}
+                onClick={() => {
+                  if (here) { setSummoned(s => s.filter(x => x !== a.id)); }
+                  else {
+                    setSummoned(s => [...s, a.id]);
+                    if (!loading) callVictor(`Bring ${a.name} (${a.role}) into the room. Introduce them in one line and have them give their first read on what's on the table, in their voice. Mark it [${a.name}].`, { noTags: true });
+                  }
+                }}>
+                {here ? `\u2715 ${a.name}` : `+ ${a.name.toUpperCase()}`}
+              </button>
+            );
+          })}
+          {/* Guest */}
+          {!summoned.includes("guest") ? (
+            <button style={btn(false, ADVISORS.guest.color)} onClick={() => {
+              const r = window.prompt("Who is the guest advisor? (e.g. 'a retail pricing expert', 'an investor')");
+              if (r && r.trim()) { setGuestRole(r.trim()); setSummoned(s => [...s, "guest"]); if (!loading) callVictor(`Bring in a guest advisor: ${r.trim()}. Introduce who they are in one line and have them give their first read on what's on the table, in their voice. Mark it [Guest].`, { noTags: true }); }
+            }}>+ GUEST</button>
+          ) : (
+            <button style={btn(true, ADVISORS.guest.color)} onClick={() => { setSummoned(s => s.filter(x => x !== "guest")); setGuestRole(""); }}>\u2715 {guestRole ? guestRole.split(" ")[0].toUpperCase() : "GUEST"}</button>
+          )}
+        </div>
         <div style={{ display: "flex", gap: 18, alignItems: "flex-start", flexWrap: "wrap", justifyContent: "center" }}>
           <div style={{ flex: "1 1 360px", minWidth: 280 }}>
             {/* office meeting room */}
@@ -960,7 +1082,7 @@ export default function Victor() {
                 const c = SPEAKER_COLORS[spoken.who] || T.cyan;
                 const nm = spoken.who.charAt(0).toUpperCase() + spoken.who.slice(1);
                 return (
-                  <div style={{ position: "absolute", top: 14, left: "6%", width: "44%", maxWidth: 360, background: "rgba(9,14,20,0.92)", border: `1px solid ${c}55`, borderRadius: 10, padding: 12, boxShadow: `0 0 24px rgba(0,0,0,0.5)`, zIndex: 4 }}>
+                  <div style={{ position: "absolute", top: 14, left: 12, width: "38%", maxWidth: 230, background: "rgba(9,14,20,0.94)", border: `1px solid ${c}55`, borderRadius: 10, padding: 10, boxShadow: `0 0 24px rgba(0,0,0,0.5)`, zIndex: 5 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
                       <Avatar who={spoken.who} size={44} talking={true} />
                       <div>
@@ -1085,6 +1207,16 @@ export default function Victor() {
 
               {/* chairs + people */}
               {SEATS.map(s => <Seat key={s.id} s={s} />)}
+              {summoned.map((id, i) => {
+                const a = ADVISORS[id];
+                if (!a) return null;
+                // spread summoned advisors across upper seats
+                // flank seats clear of the centered screen (which lives top-center) and the caption (top-left)
+                const spread = [{x:8,y:58},{x:92,y:58},{x:8,y:44},{x:92,y:44}];
+                const pos = spread[i % spread.length];
+                const seat = { id: a.id, name: id === "guest" && guestRole ? guestRole.split(" ")[0] : a.name, role: id === "guest" && guestRole ? guestRole : a.role, x: pos.x, y: pos.y, color: a.color };
+                return <Seat key={a.id} s={seat} />;
+              })}
               <Presenter />
             </div>
             {ambient && <div style={{ textAlign: "center", color: T.muted, fontStyle: "italic", fontSize: 12, maxWidth: 460, margin: "8px auto 0", opacity: 0.8 }}>{ambient}</div>}
