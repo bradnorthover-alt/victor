@@ -424,7 +424,13 @@ export default function Victor() {
 
   function Seat({ s }) {
     const on = activeSpeaker === s.id;
+    // Brad & Jonathan: when a room is active, only show as "present" if they've actually joined.
+    // Victor & Dana are the standing AI cast and are always present.
+    const isHuman = s.id === "brad" || s.id === "jonathan";
+    const presentInRoom = roomCode ? !!roomOnline[s.id] : true;
+    const dimmed = isHuman && roomCode && !presentInRoom;
     const empty = !s.name;
+    const displayName = isHuman && roomNames[s.id] ? roomNames[s.id] : s.name;
     const presenting = s.id === "victor" && slides.length > 0;
     return (
       <div style={{ position: "absolute", left: `${s.x}%`, top: `${s.y}%`, transform: "translate(-50%,-50%)", textAlign: "center", zIndex: s.y > 50 ? 6 : 2 }}>
@@ -450,18 +456,19 @@ export default function Victor() {
         </div>
         {/* occupant — hidden for Victor while he's up presenting */}
         {!empty && !presenting && (
-          <div style={{ marginTop: -34, position: "relative", zIndex: 3 }}>
+          <div style={{ marginTop: -34, position: "relative", zIndex: 3, opacity: dimmed ? 0.32 : 1, filter: dimmed ? "grayscale(0.7)" : "none", transition: "opacity .4s ease, filter .4s ease" }}>
             <div style={{
               width: 38, height: 38, borderRadius: "50%", margin: "0 auto",
-              border: `2px solid ${s.color}`, background: `${s.color}${on ? "33" : "16"}`,
+              border: `2px ${dimmed ? "dashed" : "solid"} ${dimmed ? T.muted : s.color}`,
+              background: dimmed ? "transparent" : `${s.color}${on ? "33" : "16"}`,
               display: "flex", alignItems: "center", justifyContent: "center",
-              color: s.color, fontWeight: 700, fontSize: 15,
-              boxShadow: on ? `0 0 22px ${s.color}, 0 0 4px ${s.color} inset` : `0 0 8px ${s.color}40`,
-              animation: on ? "speakerGlow 1.1s ease-in-out infinite" : "none",
-            }}>{s.name[0]}</div>
-            <div style={{ fontSize: 10, color: s.color, marginTop: 4, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 0.5 }}>{s.name}</div>
-            <div style={{ fontSize: 8, color: T.muted, letterSpacing: 1 }}>{s.role.toUpperCase()}</div>
-            {on && <div style={{ fontSize: 8, color: s.color, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1 }}>● SPEAKING</div>}
+              color: dimmed ? T.muted : s.color, fontWeight: 700, fontSize: 15,
+              boxShadow: dimmed ? "none" : (on ? `0 0 22px ${s.color}, 0 0 4px ${s.color} inset` : `0 0 8px ${s.color}40`),
+              animation: on && !dimmed ? "speakerGlow 1.1s ease-in-out infinite" : "none",
+            }}>{displayName[0]}</div>
+            <div style={{ fontSize: 10, color: dimmed ? T.muted : s.color, marginTop: 4, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 0.5 }}>{displayName}</div>
+            <div style={{ fontSize: 8, color: T.muted, letterSpacing: 1 }}>{dimmed ? "NOT JOINED" : s.role.toUpperCase()}</div>
+            {on && !dimmed && <div style={{ fontSize: 8, color: s.color, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1 }}>● SPEAKING</div>}
           </div>
         )}
       </div>
