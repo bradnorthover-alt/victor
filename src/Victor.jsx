@@ -57,14 +57,12 @@ const AMBIENT = [
 // ---------- persistent storage (window.storage) with in-memory fallback ----------
 const mem = {};
 const store = {
-  ok: typeof window !== "undefined" && !!window.storage,
+  ok: (function(){ try { localStorage.setItem("__vtest","1"); localStorage.removeItem("__vtest"); return true; } catch(e) { return false; } })(),
   async get(k) {
-    if (this.ok) { try { const r = await window.storage.get(k); return r ? r.value : null; } catch { return null; } }
-    return mem[k] ?? null;
+    try { return localStorage.getItem(k); } catch(e) { return mem[k] ?? null; }
   },
   async set(k, v) {
-    if (this.ok) { try { await window.storage.set(k, v); return; } catch {} }
-    mem[k] = v;
+    try { localStorage.setItem(k, v); } catch(e) { mem[k] = v; }
   },
 };
 const K = { msgs: "victor:messages", rules: "victor:rules", state: "victor:companystate",
@@ -785,7 +783,7 @@ export default function Victor() {
               <div style={{ fontSize: 10, color: T.muted, letterSpacing: 2, marginBottom: 6, fontFamily: "'JetBrains Mono',monospace" }}>RULE ONE</div>
               <div style={{ fontSize: 12, color: T.text, lineHeight: 1.4 }}>Protect Jonathan. Always.</div>
             </div>
-            {!store.ok && <div style={{ fontSize: 10, color: T.amber, lineHeight: 1.4 }}>Note: memory isn't persisting in this preview — it'll reset when you close the app.</div>}
+            {!store.ok && <div style={{ fontSize: 10, color: T.amber, lineHeight: 1.4 }}>Note: your browser is blocking storage — history won't persist. Check privacy settings.</div>}
           </div>
         )}
 
