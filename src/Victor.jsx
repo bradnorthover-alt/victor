@@ -389,6 +389,7 @@ export default function Victor() {
   const [roomSound, setRoomSound] = useState(false);
   const [liveMode, setLiveMode] = useState(false);
   const [liveHeard, setLiveHeard] = useState(""); // what it's currently hearing
+  const [charTalking, setCharTalking] = useState(false); // mirror for UI (a character is voicing)
   const recogRef = useRef(null);
   const liveModeRef = useRef(false);
   const charSpeakingRef = useRef(false); // true while a character voice is playing (mutes mic input)
@@ -558,12 +559,20 @@ export default function Victor() {
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
       audioElRef.current = audio;
-      charSpeakingRef.current = true; // mute mic input while a character talks
-      audio.onended = () => { URL.revokeObjectURL(url); charSpeakingRef.current = false; };
-      audio.onpause = () => { charSpeakingRef.current = false; };
-      audio.play().catch((e) => { charSpeakingRef.current = false; setError("Audio blocked by browser — click the page once, then try again."); });
+      charSpeakingRef.current = true; setCharTalking(true); // mute mic input while a character talks
+      audio.onended = () => { URL.revokeObjectURL(url); charSpeakingRef.current = false; setCharTalking(false); };
+      audio.onpause = () => { charSpeakingRef.current = false; setCharTalking(false); };
+      audio.play().catch((e) => { charSpeakingRef.current = false; setCharTalking(false); setError("Audio blocked by browser — click the page once, then try again."); });
     } catch (e) { charSpeakingRef.current = false; setError("Voice fetch failed: " + String(e.message || e)); }
   }, [realVoice]);
+
+  // Stop whoever is speaking right now and hand the floor back to the user.
+  const stopSpeaking = useCallback(() => {
+    try { if (audioElRef.current) { audioElRef.current.pause(); audioElRef.current = null; } } catch(e){}
+    try { if (window.speechSynthesis) window.speechSynthesis.cancel(); } catch(e){}
+    charSpeakingRef.current = false; setCharTalking(false);
+    setPlayIdx(-1);   // end the sequential playback so the room goes quiet
+  }, []);
 
   async function callVictor(userText, opts = {}) {
     // In a shared room, tell Victor who is speaking so he can address them by name.
@@ -855,8 +864,15 @@ export default function Victor() {
     let pauseTimer = null;
 
     rec.onresult = (e) => {
-      // While a character is speaking, ignore the mic entirely (prevents the voices feeding back).
-      if (charSpeakingRef.current) { return; }
+      // While a character is speaking, the mic is muted to avoid feedback — BUT listen for a stop keyword.
+      if (charSpeakingRef.current) {
+        try {
+          let h = "";
+          for (let i = e.resultIndex; i < e.results.length; i++) h += e.results[i][0].transcript;
+          if (/\b(stop|hold on|wait|enough|hang on|let me)\b/i.test(h)) { stopSpeaking(); }
+        } catch(err){}
+        return;
+      }
       let interim = "";
       finalText = "";
       for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -1755,10 +1771,13 @@ export default function Victor() {
     <div style={wrap}>
       {liveMode && (
         <div style={{ position: "fixed", bottom: 18, left: "50%", transform: "translateX(-50%)", zIndex: 60, background: "rgba(9,14,20,0.95)", border: `1px solid ${T.green}66`, borderRadius: 24, padding: "10px 18px", display: "flex", alignItems: "center", gap: 10, maxWidth: "90%", boxShadow: `0 4px 20px rgba(0,0,0,0.5)` }}>
-          <span style={{ width: 10, height: 10, borderRadius: "50%", background: T.green, boxShadow: `0 0 10px ${T.green}`, animation: "pulse 1s infinite" }} />
-          <span style={{ fontSize: 13, color: liveHeard ? T.text : T.muted, fontFamily: "'JetBrains Mono',monospace", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 420 }}>
-            {liveHeard || "Listening… just talk"}
+          <span style={{ width: 10, height: 10, borderRadius: "50%", background: charTalking ? T.amber : T.green, boxShadow: `0 0 10px ${charTalking ? T.amber : T.green}`, animation: "pulse 1s infinite" }} />
+          <span style={{ fontSize: 13, color: liveHeard ? T.text : T.muted, fontFamily: "'JetBrains Mono',monospace", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 360 }}>
+            {charTalking ? "Speaking… (say \"stop\" or tap)" : (liveHeard || "Listening… just talk")}
           </span>
+          {charTalking && (
+            <button onClick={stopSpeaking} style={{ background: `${T.amber}22`, border: `1px solid ${T.amber}`, color: T.amber, borderRadius: 14, padding: "4px 12px", fontSize: 11, fontWeight: 600, fontFamily: "'JetBrains Mono',monospace", cursor: "pointer", letterSpacing: 1 }}>■ STOP</button>
+          )}
         </div>
       )}
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap');
