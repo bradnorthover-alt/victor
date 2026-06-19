@@ -931,10 +931,46 @@ Greet ${arriving} now if this is the start.`;
     // eslint-disable-next-line
   }, [roomOnline, meetingLive]);
 
+  // Standalone short office sound effects (chair scrape, door, papers) — fired at meeting events.
+  function playOfficeSound(kind) {
+    if (!roomSound) return; // respect the ambience toggle
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+      const ctx = new AC(); const t = ctx.currentTime;
+      if (kind === "chair") {
+        // wooden chair scrape: filtered noise sweep
+        const b = ctx.createBuffer(1, ctx.sampleRate*0.5, ctx.sampleRate);
+        const d = b.getChannelData(0); for (let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*0.5;
+        const nb = ctx.createBufferSource(); nb.buffer=b;
+        const f = ctx.createBiquadFilter(); f.type="bandpass"; f.frequency.setValueAtTime(300,t); f.frequency.linearRampToValueAtTime(180,t+0.4); f.Q.value=4;
+        const g = ctx.createGain(); g.gain.setValueAtTime(0.05,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.45);
+        nb.connect(f); f.connect(g); g.connect(ctx.destination); nb.start(t); nb.stop(t+0.5);
+      } else if (kind === "door") {
+        // door open: soft click + brief swell
+        const o = ctx.createOscillator(); const g = ctx.createGain();
+        o.type="sine"; o.frequency.value=120; g.gain.setValueAtTime(0.04,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.25);
+        o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t+0.3);
+        const b = ctx.createBuffer(1, ctx.sampleRate*0.4, ctx.sampleRate);
+        const d = b.getChannelData(0); for (let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*0.3;
+        const nb = ctx.createBufferSource(); nb.buffer=b; const f=ctx.createBiquadFilter(); f.type="lowpass"; f.frequency.value=500;
+        const ng=ctx.createGain(); ng.gain.setValueAtTime(0.02,t+0.05); ng.gain.exponentialRampToValueAtTime(0.0001,t+0.4);
+        nb.connect(f); f.connect(ng); ng.connect(ctx.destination); nb.start(t+0.05); nb.stop(t+0.42);
+      } else if (kind === "papers") {
+        const b = ctx.createBuffer(1, ctx.sampleRate*0.35, ctx.sampleRate);
+        const d = b.getChannelData(0); for (let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*0.3;
+        const nb=ctx.createBufferSource(); nb.buffer=b; const f=ctx.createBiquadFilter(); f.type="bandpass"; f.frequency.value=2800;
+        const g=ctx.createGain(); g.gain.setValueAtTime(0.012,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.34);
+        nb.connect(f); f.connect(g); g.connect(ctx.destination); nb.start(t); nb.stop(t+0.36);
+      }
+      setTimeout(() => { try { ctx.close(); } catch(e){} }, 800);
+    } catch(e){}
+  }
+
   // When you click your seat to sit down, settle in briefly, then the meeting begins.
   function sitDownAndStart() {
     setNeedsSeat(false);
-    setTimeout(() => { callMeeting({ welcome: true }); }, 1400); // ~settle-in beat after sitting
+    playOfficeSound("chair"); // chair scrape as you sit
+    setTimeout(() => { playOfficeSound("papers"); callMeeting({ welcome: true }); }, 1400); // ~settle-in beat after sitting
   }
 
   function callMeeting(opts = {}) {
@@ -949,7 +985,7 @@ Greet ${arriving} now if this is the start.`;
     here.push(myName || (myRole === "jonathan" ? "Jonathan" : "Brad"));
     if (roomCode && roomOnline && roomOnline.jonathan && myRole !== "jonathan") here.push(roomNames?.jonathan || "Jonathan");
     const greetLine = opts.welcome
-      ? `${here[0]} has just walked in and taken a seat. Open warmly: have the team greet ${here.join(" and ")} by name as ${here.length>1?"they":"they"} sit down (a quick hello from Victor, and one or two others like Margaret or Ronda). Then call the meeting to order. `
+      ? `${here[0]} has just walked in and taken a seat. The room was mid-chatter \u2014 open with a brief, natural pre-meeting beat: one or two cast members finishing a light exchange (a quick quip, "how was the weekend", coffee), then they notice ${here[0]} and greet ${here.join(" and ")} warmly by name. Victor lets the room settle, then calls the meeting to order. Keep the small talk to 2-3 short turns max, human and easy, before getting to business. (Skip the small talk entirely if in crisis mode.) `
       : "";
     let directive;
     if (opts.kind === "oneonone") {
@@ -1835,6 +1871,7 @@ Greet ${arriving} now if this is the start.`;
                   if (here) { setSummoned(s => s.filter(x => x !== a.id)); }
                   else {
                     setSummoned(s => [...s, a.id]);
+                    playOfficeSound("door"); // door opens as they enter
                     if (!loading) callVictor(`Bring ${a.name} (${a.role}) into the room. Introduce them in one line and have them give their first read on what's on the table, in their voice. Mark it [${a.name}].`, { noTags: true });
                   }
                 }}>
@@ -1846,7 +1883,7 @@ Greet ${arriving} now if this is the start.`;
           {!summoned.includes("guest") ? (
             <button style={btn(false, ADVISORS.guest.color)} onClick={() => {
               const r = window.prompt("Who is the guest advisor? (e.g. 'a retail pricing expert', 'an investor')");
-              if (r && r.trim()) { setGuestRole(r.trim()); setSummoned(s => [...s, "guest"]); if (!loading) callVictor(`Bring in a guest advisor: ${r.trim()}. Introduce who they are in one line and have them give their first read on what's on the table, in their voice. Mark it [Guest].`, { noTags: true }); }
+              if (r && r.trim()) { setGuestRole(r.trim()); setSummoned(s => [...s, "guest"]); playOfficeSound("door"); if (!loading) callVictor(`Bring in a guest advisor: ${r.trim()}. Introduce who they are in one line and have them give their first read on what's on the table, in their voice. Mark it [Guest].`, { noTags: true }); }
             }}>+ GUEST</button>
           ) : (
             <button style={btn(true, ADVISORS.guest.color)} onClick={() => { setSummoned(s => s.filter(x => x !== "guest")); setGuestRole(""); }}>\u2715 {guestRole ? guestRole.split(" ")[0].toUpperCase() : "GUEST"}</button>
