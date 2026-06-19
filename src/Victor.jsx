@@ -634,6 +634,7 @@ export default function Victor() {
     theo:     { stability: 0.45, similarity_boost: 0.85, style: 0.4  }, // casual
     guest:    { stability: 0.5,  similarity_boost: 0.8,  style: 0.3  },
     vivian:   { stability: 0.45, similarity_boost: 0.85, style: 0.45 }, // warm, welcoming
+    narrator: { stability: 0.7,  similarity_boost: 0.75, style: 0.1  }, // even, understated
   };
   const VOICE_IDS = {
     victor: "onwK4e9ZLuTAKqWW03F9",   // Daniel — authoritative male
@@ -644,6 +645,7 @@ export default function Victor() {
     theo: "bIHbv24MWmeRgasZH58o",     // Will — casual, friendly male (premium)
     guest: "cjVigY5qzO86Huf0OWal",    // Eric — neutral male (premium)
     vivian: "pFZP5JQG7iQjIQuC4Bku",   // Lily — warm, friendly receptionist
+    narrator: "onwK4e9ZLuTAKqWW03F9", // Daniel — calm narrator for stage directions
   };
 
   const speakReal = useCallback(async (who, text, force) => {
@@ -679,6 +681,57 @@ export default function Victor() {
       audio.play().catch((e) => { charSpeakingRef.current = false; setCharTalking(false); setError("Audio blocked by browser — click the page once, then try again."); });
     } catch (e) { charSpeakingRef.current = false; setError("Voice fetch failed: " + String(e.message || e)); }
   }, [realVoice, mode, messages]);
+
+  // Awaitable single-voice speak: resolves when that audio clip finishes (so segments play in order).
+  const speakRealAwait = useCallback((who, text, force) => {
+    return new Promise(async (resolve) => {
+      if ((!realVoice && !force) || !text || !text.trim()) { resolve(); return; }
+      const voiceId = VOICE_IDS[who] || VOICE_IDS.victor;
+      setCreditsUsed(c => c + Math.min(500, text.length));
+      let tune = { ...(VOICE_TUNE[who] || VOICE_TUNE.victor) };
+      const lastMsgMode = [...messages].reverse().find(m => m.mode)?.mode;
+      const inCrisis = mode === "C" || (mode === "auto" && lastMsgMode === "C");
+      if (inCrisis) { tune.stability = Math.min(0.85, tune.stability + 0.2); tune.style = Math.max(0, tune.style - 0.15); }
+      try {
+        if (audioElRef.current) { try { audioElRef.current.pause(); } catch(e){} audioElRef.current = null; }
+        const res = await fetch("/api/voice", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: text.slice(0, 500), voiceId, tune }) });
+        if (!res.ok) { resolve(); return; }
+        const blob = await res.blob();
+        if (!blob || blob.size < 200) { resolve(); return; }
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audioElRef.current = audio;
+        charSpeakingRef.current = true; setCharTalking(true);
+        const done = () => { URL.revokeObjectURL(url); charSpeakingRef.current = false; setCharTalking(false); resolve(); };
+        audio.onended = done;
+        audio.onerror = done;
+        audio.play().catch(() => { done(); });
+      } catch (e) { resolve(); }
+    });
+  }, [realVoice, mode, messages]);
+
+  // Speak a turn with stage directions narrated separately from the character's dialogue.
+  const speakTurn = useCallback(async (who, rawText, force) => {
+    if (!rawText) return;
+    // split into ordered segments: stage directions (*...* or [phrase]) vs dialogue
+    const parts = [];
+    const re = /(\*[^*]+\*|\[[^\]]+\])/g;
+    let last = 0, m;
+    while ((m = re.exec(rawText)) !== null) {
+      if (m.index > last) { const d = rawText.slice(last, m.index).trim(); if (d) parts.push({ kind: "dialogue", text: d }); }
+      const action = m[0].replace(/^[*\[]|[*\]]$/g, "").trim();
+      if (action) parts.push({ kind: "action", text: action });
+      last = re.lastIndex;
+    }
+    if (last < rawText.length) { const d = rawText.slice(last).trim(); if (d) parts.push({ kind: "dialogue", text: d }); }
+    if (parts.length === 0) return;
+    // play segments in order, waiting for each to finish
+    for (const p of parts) {
+      const voiceWho = p.kind === "action" ? "narrator" : who;
+      await speakRealAwait(voiceWho, p.text, force);
+    }
+  }, [speakRealAwait, realVoice]);
+
 
   // Stop whoever is speaking right now and hand the floor back to the user.
   const stopSpeaking = useCallback(() => {
@@ -1240,11 +1293,12 @@ Greet Brad now if this is the start.`;
       if (stageOnly && !sp) continue;
       if (sp) {
         if (cur) turns.push(cur);
-        cur = { who: sp[1].toLowerCase(), said: stripStage(sp[2] || "") };
+        cur = { who: sp[1].toLowerCase(), said: stripStage(sp[2] || ""), raw: (sp[2] || "") };
       } else if (cur) {
         cur.said += (cur.said ? " " : "") + stripStage(ln);
+        cur.raw += (cur.raw ? " " : "") + ln;
       } else {
-        cur = { who: "victor", said: stripStage(ln) };
+        cur = { who: "victor", said: stripStage(ln), raw: ln };
       }
     }
     if (cur) turns.push(cur);
@@ -1266,8 +1320,8 @@ Greet Brad now if this is the start.`;
   useEffect(() => {
     if (playIdx < 0 || playIdx >= turns.length) return;
     const said = turns[playIdx].said;
-    // speak this turn in the character's real voice (if enabled)
-    speakReal(turns[playIdx].who, said);
+    // speak this turn — dialogue in the character's voice, stage directions in the narrator voice
+    speakTurn(turns[playIdx].who, turns[playIdx].raw || said);
     // duration: ~45ms/char, clamped 1.6s–7s
     const dur = Math.max(1600, Math.min(7000, said.length * 45));
     // type the caption out
