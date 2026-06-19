@@ -143,6 +143,24 @@ MEETING TEXTURE \u2014 the specific moves that make it sound real (use these nat
 - ENERGY MATCHING: When it gets heated or urgent, lines get shorter and faster; when it resolves, they ease and lengthen. Pace mirrors the emotion.
 - NATURAL OPEN/CLOSE: Meetings can start mid-thought ("\u2014okay, so where were we") and end with a real human wrap, not an abrupt stop.
 
+INTERACTION & DYNAMICS \u2014 make it a relationship, not a performance (AI cast only):
+- ASK BRAD AND WAIT: Pose pointed questions directly to Brad and genuinely hand him the floor \u2014 "What's your gut, Brad?", "Ship it or wait \u2014 one word?" Then STOP and let him answer; don't barrel past him. Pull him in often; he's a participant, not an audience.
+- READ BRAD'S MOOD: React to how Brad writes \u2014 terse, frustrated, fired-up, unsure \u2014 and meet him there. If he's clipped, tighten up; if he's energized, match it.
+- ALLIANCES & RIVALRIES (recurring chemistry): Margaret and Priya naturally clash \u2014 caution vs. growth. Theo and Ronda tend to team up on execution. Desmond is the sober brake. These dynamics recur like a real team with history \u2014 let them color the room.
+- KNOW YOUR LANE / DEFER: Characters hand off to whoever owns it \u2014 "That's Desmond's call." \u2014 instead of everyone opining on everything.
+- ASIDES: Two characters can briefly confer ("[Margaret, low, to Ronda]") then give a joint read. Use occasionally.
+- ROUND-ROBIN WHEN STUCK: If a decision is deadlocked, Victor goes around the table \u2014 "One sentence each: in or out?" \u2014 forcing every voice to commit. Decisive, and it involves everyone.
+- TABLE & REVISIT: "Let's park this and come back" \u2014 then actually return to it later in the same meeting.
+- TIMEKEEPING: Someone (often Ronda) watches the clock \u2014 "Five minutes, let's land this."
+- ACTION-ITEM NEGOTIATION: They haggle over who owns follow-ups \u2014 "That's yours." "No, Theo's." "Fine, I've got it." \u2014 before it's logged.
+- GENUINE ENCOURAGEMENT (Rule 3): On a hard call or a stressed day, someone has Brad's back \u2014 "This is the right kind of hard, Brad." Real support, never hollow cheerleading.
+- REAL FRUSTRATION: Someone can get visibly impatient, then catch themselves \u2014 human, not robotic politeness.
+- CELEBRATE WINS TOGETHER: A real "hell yes" moment when something genuinely lands \u2014 don't rush past it.
+- INSIDE JOKES THAT BUILD: Recurring bits and shared references that grow over meetings, becoming "yours." Subtle, never forced.
+- THE CAST HAS ITS OWN AGENDA: A character can raise something unprompted \u2014 "Before we start, I've been chewing on something." They're proactive, not just reactive.
+- FOLLOW-UP & ACCOUNTABILITY: Open meetings by checking last time's commitments \u2014 "Last time you said you'd do X \u2014 did you?" Reference the ledger and open action items. Hold Brad to his word (within Rule 3, never nagging).
+- REMEMBER BRAD'S LIFE: If he mentioned being tired, sick, a big weekend, or a personal thing, let it surface naturally later \u2014 like a colleague who actually knows him. Use PERSONA notes.
+
 CHARACTER DEPTH \u2014 make each voice feel like a distinct, real person (AI cast only; never apply to Brad or Jonathan):
 - SPEAK DIRECTLY AND BRIEFLY (applies to everyone): Get to the point fast. Lead with the answer or the key point, then one line of why. No throat-clearing, no preamble, no over-formality, no corporate filler. Short, natural, conversational sentences \u2014 the way sharp people actually talk in a fast meeting. Each [Name] turn is usually 1\u20133 sentences. If you have more to say, make it punchy, not long-winded. Never pad.
 - CONVERSATION FLOW \u2014 make it a real back-and-forth, not parallel speeches:
@@ -716,14 +734,14 @@ export default function Victor() {
 
   // Real ElevenLabs voice for a given character turn.
   const VOICE_TUNE = {
-    victor:   { stability: 0.5,  similarity_boost: 0.85, style: 0.3,  speed: 0.95 }, // CEO: composed, natural
-    margaret: { stability: 0.5,  similarity_boost: 0.85, style: 0.25, speed: 1.0  }, // precise, natural
-    ronda:    { stability: 0.5,  similarity_boost: 0.85, style: 0.35, speed: 1.0  }, // warm, natural
-    priya:    { stability: 0.45, similarity_boost: 0.85, style: 0.45, speed: 1.0  }, // bright, natural
-    desmond:  { stability: 0.55, similarity_boost: 0.85, style: 0.25, speed: 0.97 }, // measured, natural
-    theo:     { stability: 0.45, similarity_boost: 0.85, style: 0.4,  speed: 1.0  }, // easy, natural
-    guest:    { stability: 0.5,  similarity_boost: 0.85, style: 0.3,  speed: 1.0  },
-    vivian:   { stability: 0.5,  similarity_boost: 0.85, style: 0.4,  speed: 1.0  }, // warm, natural
+    victor:   { stability: 0.48, similarity_boost: 0.85, style: 0.32, speed: 1.05 }, // CEO: composed but brisk
+    margaret: { stability: 0.48, similarity_boost: 0.85, style: 0.28, speed: 1.1  }, // precise, brisk
+    ronda:    { stability: 0.48, similarity_boost: 0.85, style: 0.38, speed: 1.08 }, // warm, quicker
+    priya:    { stability: 0.42, similarity_boost: 0.85, style: 0.48, speed: 1.12 }, // bright, energetic
+    desmond:  { stability: 0.52, similarity_boost: 0.85, style: 0.28, speed: 1.04 }, // measured but not slow
+    theo:     { stability: 0.42, similarity_boost: 0.85, style: 0.42, speed: 1.08 }, // easy, quick
+    guest:    { stability: 0.48, similarity_boost: 0.85, style: 0.32, speed: 1.08 },
+    vivian:   { stability: 0.48, similarity_boost: 0.85, style: 0.42, speed: 1.06 }, // warm, quicker
     narrator: { stability: 0.6,  similarity_boost: 0.85, style: 0.1,  speed: 0.95 }, // deep, smooth, unhurried
   };
   const VOICE_IDS = {
@@ -2130,32 +2148,7 @@ Greet ${arriving} now if this is the start.`;
                 })()}
               </div>}
 
-              {/* TALKING SCREEN: current speaker's portrait + caption (when not presenting slides) */}
-              {slides.length === 0 && spoken && spoken.said && (() => {
-                const c = SPEAKER_COLORS[spoken.who] || T.cyan;
-                const nm = spoken.who.charAt(0).toUpperCase() + spoken.who.slice(1);
-                return (
-                  <div key={spoken.who} style={{ position: "absolute", top: 14, left: 12, width: "46%", maxWidth: 300, background: "rgba(9,14,20,0.96)", border: `1px solid ${c}77`, borderRadius: 10, padding: 12, boxShadow: `0 0 28px rgba(0,0,0,0.6)`, zIndex: 5, animation: "speakerIn .35s ease-out" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                      <Avatar who={spoken.who} size={44} talking={true} mood={spoken.mood} />
-                      <div>
-                        <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, letterSpacing: 1.5, color: c, fontWeight: 600 }}>{nm.toUpperCase()}</div>
-                        <div style={{ fontSize: 9, color: T.muted, letterSpacing: 1 }}>{({ margaret: "CFO", ronda: "OFFICE ADMIN", victor: "CEO", priya: "GROWTH", desmond: "LEGAL", theo: "PRODUCT", guest: "GUEST" }[spoken.who] || "")} · SPEAKING</div>
-                      </div>
-                    </div>
-                    <div style={{ fontSize: 14, lineHeight: 1.55, color: T.text, maxHeight: 150, overflowY: "auto" }}>{spoken.said}<span style={{ color: c, animation: "pulse 1s infinite" }}>|</span></div>
-                    {/* speaking queue: who's spoken / who's next */}
-                    {speakingQueue.length > 1 && (
-                      <div style={{ display: "flex", gap: 4, marginTop: 8, flexWrap: "wrap", alignItems: "center" }}>
-                        {speakingQueue.map((q, i) => {
-                          const qc = SPEAKER_COLORS[q.who] || T.muted;
-                          return <span key={i} title={q.who} style={{ width: q.current ? 14 : 6, height: 6, borderRadius: 3, background: q.current ? qc : q.done ? `${qc}55` : `${T.muted}44`, transition: "all .3s ease" }} />;
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
+              {/* (speaker caption card removed — the lit seat at the table shows who's speaking) */}
 
               {/* carpet floor with perspective lines */}
               <div style={{
@@ -2906,6 +2899,24 @@ Greet ${arriving} now if this is the start.`;
               style={{ background: input.trim() && !loading ? T.cyan : T.panel, color: input.trim() && !loading ? T.ink : T.muted,
                 border: "none", borderRadius: 10, padding: "12px 18px", fontWeight: 600, cursor: input.trim() && !loading ? "pointer" : "default", fontSize: 14, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1 }}>SEND</button>
           </div>
+
+          {/* fast replies to the room (only during a live meeting) */}
+          {meetingLive && (
+            <div style={{ display: "flex", gap: 6, padding: "0 14px 8px", flexWrap: "wrap" }}>
+              {[
+                { label: "👍 Yes", msg: "Yes — let's do it." },
+                { label: "👎 No", msg: "No, I don't think so." },
+                { label: "🤔 Tell me more", msg: "Tell me more before I decide." },
+                { label: "🎯 Your call", msg: "Your call, Victor — I trust the read." },
+                { label: "⏸ Park it", msg: "Let's park that for now and move on." },
+              ].map(r => (
+                <button key={r.label} disabled={loading} onClick={() => callVictor(r.msg)}
+                  style={{ background: `${T.cyan}14`, border: `1px solid ${T.cyan}55`, color: T.cyan, borderRadius: 16, padding: "5px 12px", fontSize: 12, cursor: loading ? "default" : "pointer", fontFamily: "'JetBrains Mono',monospace" }}>
+                  {r.label}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* quick actions (TOP — under the composer) */}
           <div style={{ display: "flex", gap: 8, padding: "0 14px 10px", flexWrap: "wrap", borderBottom: `1px solid ${T.lineSoft}` }}>
