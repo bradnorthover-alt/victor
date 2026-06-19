@@ -653,14 +653,14 @@ export default function Victor() {
     narrator: { stability: 0.6,  similarity_boost: 0.85, style: 0.1,  speed: 0.95 }, // deep, smooth, unhurried
   };
   const VOICE_IDS = {
-    victor: "onwK4e9ZLuTAKqWW03F9",   // Daniel — deep, authoritative anchor-style male (CEO)
+    victor: "TX3LPaxmHKxFdv7VOQHJ",   // Liam — smooth, articulate male (CEO)
     margaret: "XB0fDUnXU5powFXDhCwa", // Charlotte — smooth, crisp female (kept)
     ronda: "EXAVITQu4vr4xnSDxMaL",    // Sarah — smooth, warm female
     priya: "XrExE9yKIg1WjnnlVkGX",    // Matilda — smooth, bright female
-    desmond: "pqHfZKP75CvOlQylNhV4",  // Bill — smooth, warm older male (gravitas)
-    theo: "TX3LPaxmHKxFdv7VOQHJ",     // Liam — smooth, articulate younger male
+    desmond: "nPczCjzI2devNBz1zQrb",  // Brian — resonant, measured male (legal/risk)
+    theo: "pqHfZKP75CvOlQylNhV4",     // Bill — smooth, warm male (product)
     guest: "cgSgspJ2msm6clMCkdW9",    // Jessica — smooth, expressive (guest)
-    vivian: "EXAVITQu4vr4xnSDxMaL",   // Sarah — smooth, warm receptionist
+    vivian: "pFZP5JQG7iQjIQuC4Bku",   // Lily — warm, friendly receptionist (distinct from Ronda)
     narrator: "JBFqnCBsd6RMkjVDRZzb", // George — deep, cinematic narrator (distinct)
   };
 
