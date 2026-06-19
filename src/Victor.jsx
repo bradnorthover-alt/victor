@@ -884,9 +884,10 @@ Greet ${arriving} now if this is the start.`;
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
-          max_tokens: 1000,
+          max_tokens: 600,
           system,
-          messages: next.map(m => ({ role: m.role, content: m.content })),
+          // send only the recent history (last ~16 messages) so each call is lighter and faster
+          messages: next.slice(-16).map(m => ({ role: m.role, content: m.content })),
         }),
       });
       const data = await res.json();
