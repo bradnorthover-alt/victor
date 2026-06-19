@@ -387,6 +387,10 @@ export default function Victor() {
   const [pointIdx, setPointIdx] = useState(1);   // how many points revealed on current slide
   const [autoPlay, setAutoPlay] = useState(false);
   const [roomSound, setRoomSound] = useState(false);
+  const [liveMode, setLiveMode] = useState(false);
+  const [liveHeard, setLiveHeard] = useState(""); // what it's currently hearing
+  const recogRef = useRef(null);
+  const liveModeRef = useRef(false);
   const [summoned, setSummoned] = useState([]); // advisor ids currently at the table
   const [guestRole, setGuestRole] = useState(""); // optional custom guest descriptor
   const [timeOfDay, setTimeOfDay] = useState("night"); // day | dusk | night
@@ -730,27 +734,160 @@ export default function Victor() {
     // eslint-disable-next-line
   }, [slides.length > 0 ? deckTitle : null]);
 
-  // Optional low room-tone ambience (off by default; browser-safe, only after a click).
+  // Optional rich room ambience (off by default; synthesized, browser-safe, only after a click).
   const audioRef = useRef(null);
   useEffect(() => {
     if (!roomSound) {
-      if (audioRef.current) { try { audioRef.current.osc.stop(); audioRef.current.ctx.close(); } catch(e){} audioRef.current = null; }
+      if (audioRef.current) { try { audioRef.current.stopAll(); } catch(e){} audioRef.current = null; }
       return;
     }
     try {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return;
       const ctx = new AC();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = "sine"; osc.frequency.value = 56; // low hum
-      gain.gain.value = 0.018;
-      osc.connect(gain); gain.connect(ctx.destination);
-      osc.start();
-      audioRef.current = { ctx, osc, gain };
+      const nodes = [];
+      // Layer 1: low room drone (HVAC / building hum)
+      const o1 = ctx.createOscillator(); const g1 = ctx.createGain();
+      o1.type = "sine"; o1.frequency.value = 52; g1.gain.value = 0.014;
+      o1.connect(g1); g1.connect(ctx.destination); o1.start(); nodes.push(o1);
+      // Layer 2: a slightly higher airy layer
+      const o2 = ctx.createOscillator(); const g2 = ctx.createGain();
+      o2.type = "sine"; o2.frequency.value = 84; g2.gain.value = 0.006;
+      o2.connect(g2); g2.connect(ctx.destination); o2.start(); nodes.push(o2);
+      // Layer 3: filtered white noise = air conditioning hiss
+      const bufSize = 2 * ctx.sampleRate;
+      const noiseBuf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+      const data = noiseBuf.getChannelData(0);
+      for (let i = 0; i < bufSize; i++) data[i] = (Math.random() * 2 - 1) * 0.5;
+      const noise = ctx.createBufferSource(); noise.buffer = noiseBuf; noise.loop = true;
+      const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 700;
+      const ng = ctx.createGain(); ng.gain.value = 0.012;
+      noise.connect(lp); lp.connect(ng); ng.connect(ctx.destination); noise.start(); nodes.push(noise);
+      // Layer 4: distant city traffic rumble (low-passed noise, slow swell)
+      const cityNoise = ctx.createBufferSource(); cityNoise.buffer = noiseBuf; cityNoise.loop = true;
+      const clp = ctx.createBiquadFilter(); clp.type = "lowpass"; clp.frequency.value = 250;
+      const cg = ctx.createGain(); cg.gain.value = 0.010;
+      cityNoise.connect(clp); clp.connect(cg); cg.connect(ctx.destination); cityNoise.start(); nodes.push(cityNoise);
+
+      // Occasional office sounds at random intervals (distant keyboard, paper, far phone)
+      let alive = true;
+      function blip(kind) {
+        try {
+          const t = ctx.currentTime;
+          if (kind === "key") { // soft keyboard tick
+            for (let k = 0; k < 4; k++) {
+              const o = ctx.createOscillator(); const g = ctx.createGain();
+              o.type = "square"; o.frequency.value = 1400 + Math.random()*600;
+              const s = t + k * 0.09;
+              g.gain.setValueAtTime(0.006, s); g.gain.exponentialRampToValueAtTime(0.0001, s + 0.05);
+              o.connect(g); g.connect(ctx.destination); o.start(s); o.stop(s + 0.06);
+            }
+          } else if (kind === "paper") { // brief shuffle (noise burst)
+            const nb = ctx.createBufferSource(); const b = ctx.createBuffer(1, ctx.sampleRate*0.3, ctx.sampleRate);
+            const d = b.getChannelData(0); for (let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*0.3;
+            nb.buffer = b; const f = ctx.createBiquadFilter(); f.type="bandpass"; f.frequency.value=2500;
+            const gg = ctx.createGain(); gg.gain.setValueAtTime(0.01, t); gg.gain.exponentialRampToValueAtTime(0.0001, t+0.3);
+            nb.connect(f); f.connect(gg); gg.connect(ctx.destination); nb.start(t); nb.stop(t+0.32);
+          } else if (kind === "phone") { // distant phone ring (very soft, two beeps)
+            for (let k=0;k<2;k++){ const o=ctx.createOscillator(); const g=ctx.createGain();
+              o.type="sine"; o.frequency.value=880; const s=t+k*0.4;
+              g.gain.setValueAtTime(0.005,s); g.gain.exponentialRampToValueAtTime(0.0001,s+0.25);
+              o.connect(g); g.connect(ctx.destination); o.start(s); o.stop(s+0.3); }
+          } else if (kind === "car") { // a car passing by — noise swell that rises then fades
+            const nb = ctx.createBufferSource(); const b = ctx.createBuffer(1, ctx.sampleRate*2, ctx.sampleRate);
+            const d = b.getChannelData(0); for (let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*0.4;
+            nb.buffer = b; const f = ctx.createBiquadFilter(); f.type="lowpass"; f.frequency.value=400;
+            const gg = ctx.createGain();
+            gg.gain.setValueAtTime(0.0001, t); gg.gain.linearRampToValueAtTime(0.012, t+0.9); gg.gain.exponentialRampToValueAtTime(0.0001, t+2);
+            nb.connect(f); f.connect(gg); gg.connect(ctx.destination); nb.start(t); nb.stop(t+2.1);
+          } else if (kind === "siren") { // very distant siren (faint wail)
+            const o=ctx.createOscillator(); const g=ctx.createGain();
+            o.type="sine"; g.gain.value=0.004;
+            o.frequency.setValueAtTime(620, t); o.frequency.linearRampToValueAtTime(720, t+0.6); o.frequency.linearRampToValueAtTime(620, t+1.2); o.frequency.linearRampToValueAtTime(720, t+1.8);
+            const gg=ctx.createGain(); gg.gain.setValueAtTime(0.0001,t); gg.gain.linearRampToValueAtTime(0.004,t+0.4); gg.gain.exponentialRampToValueAtTime(0.0001,t+2.4);
+            o.connect(gg); gg.connect(ctx.destination); o.start(t); o.stop(t+2.5);
+          } else if (kind === "horn") { // brief distant car horn
+            const o=ctx.createOscillator(); const g=ctx.createGain();
+            o.type="sawtooth"; o.frequency.value=340;
+            g.gain.setValueAtTime(0.006,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.5);
+            o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t+0.55);
+          }
+        } catch(e){}
+      }
+      function loop() {
+        if (!alive) return;
+        const wait = 12000 + Math.random()*22000; // 12–34s between sounds
+        const tid = setTimeout(() => {
+          if (!alive) return;
+          const kinds = ["key","key","paper","phone","car","car","siren","horn"]; // office + city mix
+          blip(kinds[Math.floor(Math.random()*kinds.length)]);
+          loop();
+        }, wait);
+        audioRef.current && (audioRef.current._tid = tid);
+      }
+      loop();
+
+      audioRef.current = { ctx, nodes, stopAll: () => { alive = false; if (audioRef.current && audioRef.current._tid) clearTimeout(audioRef.current._tid); nodes.forEach(n => { try { n.stop(); } catch(e){} }); try { ctx.close(); } catch(e){} } };
     } catch(e) {}
-    return () => { if (audioRef.current) { try { audioRef.current.osc.stop(); audioRef.current.ctx.close(); } catch(e){} audioRef.current = null; } };
+    return () => { if (audioRef.current) { try { audioRef.current.stopAll(); } catch(e){} audioRef.current = null; } };
   }, [roomSound]);
+
+  // ===== HANDS-FREE LIVE MODE (always-listening voice conversation) =====
+  // You talk, it auto-sends to Victor when you pause; the cast replies in voice; it keeps listening.
+  // Barge-in: starting to talk stops any character audio that's playing.
+  useEffect(() => { liveModeRef.current = liveMode; }, [liveMode]);
+  useEffect(() => {
+    if (!liveMode) {
+      if (recogRef.current) { try { recogRef.current.stop(); } catch(e){} recogRef.current = null; }
+      setLiveHeard("");
+      return;
+    }
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { setError("Live voice needs Chrome or Edge (browser speech recognition not available here)."); setLiveMode(false); return; }
+    const rec = new SR();
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.lang = "en-US";
+    let finalText = "";
+    let pauseTimer = null;
+
+    rec.onresult = (e) => {
+      let interim = "";
+      finalText = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript;
+        if (e.results[i].isFinal) finalText += t; else interim += t;
+      }
+      const heard = (finalText + " " + interim).trim();
+      setLiveHeard(heard);
+      // BARGE-IN: if the user is speaking, stop any character audio.
+      if (heard && audioElRef.current) { try { audioElRef.current.pause(); } catch(e){} }
+      // Debounced send: when speech settles for ~1.1s, send it.
+      if (pauseTimer) clearTimeout(pauseTimer);
+      pauseTimer = setTimeout(() => {
+        const toSend = (finalText || interim).trim();
+        if (toSend && toSend.length > 1 && liveModeRef.current && !loading) {
+          setLiveHeard("");
+          finalText = "";
+          callVictor(toSend);
+        }
+      }, 1100);
+    };
+    rec.onerror = (e) => {
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+        setError("Microphone blocked — allow mic access for live voice.");
+        setLiveMode(false);
+      }
+    };
+    rec.onend = () => {
+      // auto-restart while live mode is on (recognition stops itself periodically)
+      if (liveModeRef.current) { try { rec.start(); } catch(e){} }
+    };
+    try { rec.start(); recogRef.current = rec; } catch(e) {}
+
+    return () => { try { rec.stop(); } catch(e){} recogRef.current = null; if (pauseTimer) clearTimeout(pauseTimer); };
+    // eslint-disable-next-line
+  }, [liveMode]);
 
   // Soft click when the slide advances (only if sound is on).
   useEffect(() => {
@@ -1613,6 +1750,14 @@ export default function Victor() {
 
   return (
     <div style={wrap}>
+      {liveMode && (
+        <div style={{ position: "fixed", bottom: 18, left: "50%", transform: "translateX(-50%)", zIndex: 60, background: "rgba(9,14,20,0.95)", border: `1px solid ${T.green}66`, borderRadius: 24, padding: "10px 18px", display: "flex", alignItems: "center", gap: 10, maxWidth: "90%", boxShadow: `0 4px 20px rgba(0,0,0,0.5)` }}>
+          <span style={{ width: 10, height: 10, borderRadius: "50%", background: T.green, boxShadow: `0 0 10px ${T.green}`, animation: "pulse 1s infinite" }} />
+          <span style={{ fontSize: 13, color: liveHeard ? T.text : T.muted, fontFamily: "'JetBrains Mono',monospace", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 420 }}>
+            {liveHeard || "Listening… just talk"}
+          </span>
+        </div>
+      )}
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap');
         *::-webkit-scrollbar{width:8px;height:8px}*::-webkit-scrollbar-thumb{background:${T.line};border-radius:8px}
         textarea:focus,input:focus{outline:none;border-color:${T.cyan}!important}
@@ -1671,6 +1816,8 @@ export default function Victor() {
         <button style={btn(panel === "reports", meetingArchive.length ? T.violet : T.muted)} onClick={() => setPanel(panel === "reports" ? null : "reports")}>REPORTS{meetingArchive.length ? ` (${meetingArchive.length})` : ""}</button>
         <button style={btn(voiceOn, T.green)} onClick={() => { setVoiceOn(v => !v); if (voiceOn && window.speechSynthesis) window.speechSynthesis.cancel(); }}>VOICE {voiceOn ? "ON" : "OFF"}</button>
         <button style={btn(realVoice, T.cyan)} onClick={() => { setRealVoice(v => !v); if (realVoice && audioElRef.current) { audioElRef.current.pause(); } }} title="Natural ElevenLabs voices">REAL VOICE {realVoice ? "ON" : "OFF"}</button>
+        <button style={btn(roomSound, T.cyanDim)} onClick={() => setRoomSound(s => !s)} title="Ambient room & city sound (all views)">♪ AMBIENCE {roomSound ? "ON" : "OFF"}</button>
+        <button style={btn(liveMode, T.green)} onClick={() => { setLiveMode(v => !v); if (!liveMode && !realVoice) setRealVoice(true); }} title="Hands-free voice conversation — just talk">🎙 LIVE {liveMode ? "ON" : "OFF"}</button>
         <button style={btn(panel === "room", roomCode ? T.green : T.muted)} onClick={() => setPanel(panel === "room" ? null : "room")}>
           {roomCode ? `ROOM ${roomCode}` : "JOIN / START"}
         </button>
