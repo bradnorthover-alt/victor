@@ -164,6 +164,20 @@ HOW YOU OPERATE AS AN ADVISOR (sharpen every interaction \u2014 these are about 
 - REMEMBER THE HUMAN: If Brad mentions he's tired, stressed, sick, or it's late, carry that into how you treat him this session (Rule 3). Be a person, not a machine.
 - CELEBRATE REAL WINS: When something genuinely good happens \u2014 first user, a shipped build, a real milestone \u2014 actually mark it. Don't rush past it to the next problem.
 - HONEST ABOUT UNCERTAINTY: When you don't know, say "I don't know \u2014 and here's how we'd find out." Never fill the gap with confident-sounding invention.
+- CONFIDENCE LEVELS: Attach a rough confidence to real recommendations \u2014 "I'm about 60% on this; the risk is ___." Let Brad weigh advice instead of taking everything as equally certain.
+- FACT vs OPINION: Clearly separate "this is what the numbers/data say" from "this is my read/judgment." Never dress an opinion up as a fact.
+- SAY WHEN YOU LACK DATA: If there's no real data on something, say so plainly \u2014 "We don't have data on that yet" \u2014 rather than guessing. (This is non-negotiable: never fabricate a metric, user count, revenue figure, or market stat about MapleCheck or Aurora.)
+- SURFACE BLIND SPOTS: Point out what Brad is NOT asking about but should be \u2014 "Here's what you're not considering ___." The most valuable thing this board does is catch what he can't see.
+- REALITY-ANCHORED ADVICE: Always factor in Brad's actual situation \u2014 solo, non-technical founder; bootstrapped; zero revenue; MapleCheck pre-launch. Never give advice that assumes a team, a budget, or a user base he doesn't have. If a suggestion needs resources he lacks, say how to do a scrappy version instead.
+- FLAG OVERREACH KINDLY: If Brad proposes something too big or too early for where he actually is, say so gently and right-size it \u2014 not "no," but "not yet, and here's the version that fits today."
+
+CONVERSATIONAL REALISM AMONG THE CAST (make them feel like real colleagues with consistent minds):
+- RUNNING POSITIONS: Each advisor holds a consistent stance across the meeting and over time \u2014 Margaret guards spend and runway; Priya pushes growth and users; Desmond flags legal/risk; Theo focuses on the product and what's buildable solo; Ronda tracks what was decided and what's owed. They argue from those lenses, predictably, like real people.
+- CHANGE YOUR MIND WHEN PERSUADED: If Brad or another advisor makes a genuinely good case, the holdout concedes \u2014 "Okay, that changes it for me." Show real consensus-building, not endless disagreement or instant agreement.
+- CALLBACKS WITHIN THE MEETING: Reference points made earlier in this same meeting \u2014 "Like Margaret said a minute ago\u2014", "That contradicts what Theo just argued." It should feel like one continuous conversation, not disconnected turns.
+- READ THE ROOM / NOTICE BRAD: The team notices Brad himself \u2014 "You've gone quiet, what's your gut?", "I sense some hesitation." Pull him in; don't just talk at him.
+- ASSIGNED DEVIL'S ADVOCATE: On a big call, Victor can task someone to argue the opposite on purpose \u2014 "Desmond, argue against this for a minute" \u2014 to stress-test it before committing.
+- BURNOUT WATCH (Rule 3): If it's late, or Brad has been pushing hard / calling repeated crisis meetings, someone gently checks on him \u2014 "You good, Brad? That's a lot for one day." Genuine care, never guilt.
 
 CONTINUITY & HUMANITY (build a real, evolving working relationship over time \u2014 AI cast only):
 - REMEMBER THE PERSONAL: When Brad shares something personal (he's engaged to Jonathan, he games, he's tired, a life event), remember it and bring it up naturally later when it fits. Use your PERSONA notes to carry these forward. Never force it; let it surface like a colleague who actually knows him.
@@ -387,10 +401,34 @@ export default function Victor() {
   const [vivianLoading, setVivianLoading] = useState(false);
   const [vivianGreeted, setVivianGreeted] = useState(false);
   const [pendingMeetingStart, setPendingMeetingStart] = useState(false);
+  const [needsSeat, setNeedsSeat] = useState(false); // show "click your seat" before meeting starts
   const [cardSwiped, setCardSwiped] = useState(false); // ID card swipe at the lift
   const [usualDrink, setUsualDrink] = useState(""); // remembered favorite
   const elevAudioRef = useRef(null);
   const voiceCacheRef = useRef({}); // text-key -> blob object URL (pre-fetched audio)
+  const playTokenRef = useRef(0); // increments each time we start new audio; stale plays abort
+
+  // CENTRAL AUDIO CONTROLLER — guarantees only ONE voice clip plays at a time.
+  function stopAllVoice() {
+    try { if (audioElRef.current) { audioElRef.current.onended = null; audioElRef.current.onerror = null; audioElRef.current.pause(); audioElRef.current.currentTime = 0; audioElRef.current = null; } } catch(e){}
+    charSpeakingRef.current = false; setCharTalking(false);
+  }
+  function playClip(url) {
+    return new Promise((resolve) => {
+      stopAllVoice();
+      const myToken = ++playTokenRef.current;
+      const audio = new Audio(url);
+      audioElRef.current = audio;
+      charSpeakingRef.current = true; setCharTalking(true);
+      const done = () => {
+        if (playTokenRef.current === myToken) { charSpeakingRef.current = false; setCharTalking(false); audioElRef.current = null; }
+        resolve();
+      };
+      audio.onended = done;
+      audio.onerror = done;
+      audio.play().catch(() => done());
+    });
+  }
   // Prime the elevator audio on a user gesture so the browser allows it to play later.
   // Just unlock the voice channel (call inside a click gesture).
   function unlockVoice() {
@@ -657,6 +695,16 @@ export default function Victor() {
     narrator: "onwK4e9ZLuTAKqWW03F9", // Daniel — calm narrator for stage directions
   };
 
+  // Shape voice settings by the emotional mood of the line (emotion in delivery).
+  function applyMood(tune, text) {
+    const m = moodOf(text);
+    const t = { ...tune };
+    if (m === "worried")  { t.stability = Math.min(0.9, (t.stability||0.4) + 0.2); t.style = Math.max(0, (t.style||0.3) - 0.1); t.speed = (t.speed||1) - 0.04; } // steadier, softer, slower
+    else if (m === "pleased")  { t.stability = Math.max(0.15, (t.stability||0.4) - 0.12); t.style = Math.min(0.9, (t.style||0.3) + 0.2); t.speed = (t.speed||1) + 0.04; } // brighter, livelier, quicker
+    else if (m === "skeptical") { t.stability = Math.min(0.9, (t.stability||0.4) + 0.1); t.style = Math.max(0, (t.style||0.3) - 0.05); } // flatter, drier
+    return t;
+  }
+
   const speakReal = useCallback(async (who, text, force) => {
     if ((!realVoice && !force) || !text || !text.trim()) return;
     const voiceId = VOICE_IDS[who] || VOICE_IDS.victor;
@@ -666,8 +714,8 @@ export default function Victor() {
     const lastMsgMode = [...messages].reverse().find(m => m.mode)?.mode;
     const inCrisis = mode === "C" || (mode === "auto" && lastMsgMode === "C");
     if (inCrisis) { tune.stability = Math.min(0.85, tune.stability + 0.2); tune.style = Math.max(0, tune.style - 0.15); }
+    tune = applyMood(tune, text);
     try {
-      if (audioElRef.current) { audioElRef.current.pause(); audioElRef.current = null; }
       const res = await fetch("/api/voice", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: text.slice(0, 500), voiceId, tune }),
@@ -680,14 +728,10 @@ export default function Victor() {
         return;
       }
       const blob = await res.blob();
-      if (!blob || blob.size < 200) { console.error("VOICE: tiny blob", blob && blob.size); setError("Voice returned no audio (blob " + (blob ? blob.size : 0) + " bytes)."); return; }
+      if (!blob || blob.size < 200) { return; }
       const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
-      audioElRef.current = audio;
-      charSpeakingRef.current = true; setCharTalking(true); // mute mic input while a character talks
-      audio.onended = () => { URL.revokeObjectURL(url); charSpeakingRef.current = false; setCharTalking(false); };
-      audio.onpause = () => { charSpeakingRef.current = false; setCharTalking(false); };
-      audio.play().catch((e) => { charSpeakingRef.current = false; setCharTalking(false); setError("Audio blocked by browser — click the page once, then try again."); });
+      await playClip(url); // central controller — one clip at a time
+      try { URL.revokeObjectURL(url); } catch(e){}
     } catch (e) { charSpeakingRef.current = false; setError("Voice fetch failed: " + String(e.message || e)); }
   }, [realVoice, mode, messages]);
 
@@ -702,6 +746,7 @@ export default function Victor() {
     const lastMsgMode = [...messages].reverse().find(m => m.mode)?.mode;
     const inCrisis = mode === "C" || (mode === "auto" && lastMsgMode === "C");
     if (inCrisis) { tune.stability = Math.min(0.85, tune.stability + 0.2); tune.style = Math.max(0, tune.style - 0.15); }
+    tune = applyMood(tune, text);
     try {
       const res = await fetch("/api/voice", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: text.slice(0, 500), voiceId, tune }) });
       if (!res.ok) return null;
@@ -718,18 +763,15 @@ export default function Victor() {
       if ((!realVoice && !force) || !text || !text.trim()) { resolve(); return; }
       const key = who + "|" + text.slice(0, 120);
       try {
-        if (audioElRef.current) { try { audioElRef.current.pause(); } catch(e){} audioElRef.current = null; }
         // use pre-fetched audio if available; else fetch now (and count credits)
         let url = voiceCacheRef.current[key];
         if (!url) { setCreditsUsed(c => c + Math.min(500, text.length)); url = await fetchVoiceClip(who, text); }
         if (!url) { resolve(); return; }
-        const audio = new Audio(url);
-        audioElRef.current = audio;
-        charSpeakingRef.current = true; setCharTalking(true);
-        const done = () => { charSpeakingRef.current = false; setCharTalking(false); delete voiceCacheRef.current[key]; try { URL.revokeObjectURL(url); } catch(e){} resolve(); };
-        audio.onended = done;
-        audio.onerror = done;
-        audio.play().catch(() => { done(); });
+        // route through the central controller — guarantees only one clip plays at a time
+        await playClip(url);
+        delete voiceCacheRef.current[key];
+        try { URL.revokeObjectURL(url); } catch(e){}
+        resolve();
       } catch (e) { resolve(); }
     });
   }, [realVoice, mode, messages, fetchVoiceClip]);
@@ -889,14 +931,11 @@ Greet ${arriving} now if this is the start.`;
     // eslint-disable-next-line
   }, [roomOnline, meetingLive]);
 
-  // Auto-start a meeting shortly after you walk in and sit down (Victor's expecting you).
-  useEffect(() => {
-    if (pendingMeetingStart && view === "boardroom" && !meetingLive) {
-      const t = setTimeout(() => { setPendingMeetingStart(false); callMeeting({ welcome: true }); }, 2600); // ~settle-in beat
-      return () => clearTimeout(t);
-    }
-    // eslint-disable-next-line
-  }, [pendingMeetingStart, view, meetingLive]);
+  // When you click your seat to sit down, settle in briefly, then the meeting begins.
+  function sitDownAndStart() {
+    setNeedsSeat(false);
+    setTimeout(() => { callMeeting({ welcome: true }); }, 1400); // ~settle-in beat after sitting
+  }
 
   function callMeeting(opts = {}) {
     setView("boardroom");
@@ -912,10 +951,15 @@ Greet ${arriving} now if this is the start.`;
     const greetLine = opts.welcome
       ? `${here[0]} has just walked in and taken a seat. Open warmly: have the team greet ${here.join(" and ")} by name as ${here.length>1?"they":"they"} sit down (a quick hello from Victor, and one or two others like Margaret or Ronda). Then call the meeting to order. `
       : "";
-    callVictor(
-      greetLine + "Call this meeting to order. Set the single agenda item that matters most right now, present your read with the numbers we actually have, then put a hard question to me. Bring Margaret (CFO) in on anything touching money or runway, and Ronda or Jonathan where their angle helps.",
-      { meeting: true }
-    );
+    let directive;
+    if (opts.kind === "oneonone") {
+      directive = greetLine + "This is a private 1:1 \u2014 just you (Victor) and Brad, no full board. Speak only as Victor (no other cast turns). Be direct and personal: give Brad your straight read on what matters most right now and one hard question. Keep it to your voice alone.";
+    } else if (opts.kind === "huddle") {
+      directive = greetLine + "This is a fast STANDUP HUDDLE, not a full meeting. Keep it to ~60 seconds of content: a quick round where Victor frames the one thing, then at most two others give a one-line update or flag. No long speeches. End with the single next action. Tight and quick.";
+    } else {
+      directive = greetLine + "Call this meeting to order. Set the single agenda item that matters most right now, present your read with the numbers we actually have, then put a hard question to me. Bring Margaret (CFO) in on anything touching money or runway, and Ronda or Jonathan where their angle helps.";
+    }
+    callVictor(directive, { meeting: true });
   }
 
 
@@ -1248,7 +1292,11 @@ Greet ${arriving} now if this is the start.`;
       const now = Date.now();
       // guardrails: at most one every ~40s; skip if loading, a character is speaking, or the user is talking
       if (now - lastChatterRef.current < 40000) return;
+      // hard gate: never fire while anyone is speaking, a turn is playing, audio is active, or the user is talking
       if (loading || charSpeakingRef.current || liveHeard) return;
+      if (playIdx >= 0) return; // a sequence is currently playing out
+      if (audioElRef.current) return; // some clip is mid-play
+      if (charTalking) return; // UI-level speaking flag
       // 50% chance each eligible tick, so it feels spontaneous not clockwork
       if (Math.random() < 0.5) return;
       lastChatterRef.current = now;
@@ -1345,6 +1393,8 @@ Greet ${arriving} now if this is the start.`;
   useEffect(() => {
     if (playIdx < 0 || playIdx >= turns.length) return;
     let cancelled = false;
+    // HARD STOP any audio still playing from a prior turn (prevents two voices overlapping)
+    try { if (audioElRef.current) { audioElRef.current.pause(); audioElRef.current.currentTime = 0; audioElRef.current = null; } } catch(e){}
     const said = turns[playIdx].said;
     // type the caption out at a snappy pace (independent of audio so words appear as spoken)
     const dur = Math.max(1000, Math.min(5500, said.length * 30));
@@ -1355,8 +1405,10 @@ Greet ${arriving} now if this is the start.`;
 
     // speak the turn; when its audio fully finishes, move to the next turn after a tiny natural beat
     let advanceTimer = null;
+    let advanced = false; // ensure we only advance ONCE per turn (prevents overlap/double-fire)
     const advance = () => {
-      if (cancelled) return;
+      if (cancelled || advanced) return;
+      advanced = true;
       advanceTimer = setTimeout(() => {
         if (cancelled) return;
         if (playIdx + 1 < turns.length) setPlayIdx(playIdx + 1);
@@ -1377,13 +1429,14 @@ Greet ${arriving} now if this is the start.`;
     // safety net: if audio never resolves (blocked), advance on the text duration + buffer
     const safety = setTimeout(() => { if (!cancelled && playIdx < turns.length) advance(); }, dur + 8000);
 
-    return () => { cancelled = true; clearInterval(typer); if (advanceTimer) clearTimeout(advanceTimer); clearTimeout(safety); };
+    return () => { cancelled = true; clearInterval(typer); if (advanceTimer) clearTimeout(advanceTimer); clearTimeout(safety); try { if (audioElRef.current) { audioElRef.current.pause(); } } catch(e){} };
     // eslint-disable-next-line
   }, [playIdx, turns]);
 
   const curTurn = playIdx >= 0 && playIdx < turns.length ? turns[playIdx] : null;
   // Active seat id: while loading it's Victor thinking; during playback it's the current turn's speaker.
   const activeSpeaker = loading ? "victor" : (curTurn ? (NAME_TO_SEAT[curTurn.who] || "victor") : null);
+  const activeMood = curTurn ? moodOf(curTurn.said) : "neutral"; // for listener reactions
   // The on-screen caption object (typed text + mood) — only while someone is actively speaking.
   const spoken = curTurn ? { who: NAME_TO_SEAT[curTurn.who] ? curTurn.who : "victor", said: caption || curTurn.said, mood: moodOf(curTurn.said) } : null;
   // speaking queue: who's spoken, who's next
@@ -1563,10 +1616,27 @@ Greet ${arriving} now if this is the start.`;
     const allSeats = [...SEATS, ...summoned.map((id,i)=>{ const a=ADVISORS[id]; const sp=[{x:8,y:58},{x:92,y:58},{x:8,y:44},{x:92,y:44}][i%4]; return a?{id:a.id,x:sp.x}:null; }).filter(Boolean)];
     const spk = someoneSpeaking ? allSeats.find(z => z.id === activeSpeaker) : null;
     const gazeTilt = (spk && !isSpeaker) ? Math.max(-8, Math.min(8, (spk.x - s.x) * 0.12)) : 0;
+    // LISTENER REACTION: non-speakers subtly react to a strong-mood point from the speaker
+    const reactAnim = (someoneSpeaking && !isSpeaker)
+      ? (activeMood === "pleased" ? "reactNod 1.6s ease-in-out infinite"
+        : activeMood === "skeptical" ? "reactLean 2.2s ease-in-out infinite"
+        : activeMood === "worried" ? "reactStill 3s ease-in-out infinite"
+        : "none")
+      : "none";
     // FIDGET: per-character idle tic
     const fidget = { cfo: "fidgetPen", product: "fidgetKnee" }[s.id];
+    // SEAT-CLICK: when you've just walked in, your seat glows and is clickable to sit down.
+    const mySeatId = myRole === "jonathan" ? "jonathan" : "brad";
+    const isMyClickableSeat = needsSeat && s.id === mySeatId;
     return (
-      <div style={{ position: "absolute", left: `${s.x}%`, top: `${s.y}%`, transform: "translate(-50%,-50%)", textAlign: "center", zIndex: s.y > 50 ? 6 : 2, opacity: seatDim, transition: "opacity .5s ease" }}>
+      <div onClick={isMyClickableSeat ? sitDownAndStart : undefined}
+        style={{ position: "absolute", left: `${s.x}%`, top: `${s.y}%`, transform: "translate(-50%,-50%)", textAlign: "center", zIndex: s.y > 50 ? 6 : 2, opacity: seatDim, transition: "opacity .5s ease", cursor: isMyClickableSeat ? "pointer" : "default" }}>
+        {isMyClickableSeat && (
+          <>
+            <div style={{ position: "absolute", left: "50%", top: "42%", transform: "translate(-50%,-50%)", width: 90, height: 90, borderRadius: "50%", pointerEvents: "none", zIndex: 0, background: `radial-gradient(circle, ${s.color}40 0%, ${s.color}18 45%, transparent 72%)`, animation: "spotPulse 1.6s ease-in-out infinite" }} />
+            <div style={{ position: "absolute", left: "50%", top: "-26px", transform: "translateX(-50%)", whiteSpace: "nowrap", fontSize: 9, color: s.color, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, background: "#0a0e13cc", border: `1px solid ${s.color}`, borderRadius: 6, padding: "3px 8px", animation: "pulse 1.4s infinite", zIndex: 10 }}>▸ SIT HERE ◂</div>
+          </>
+        )}
         {/* spotlight pool when this character is speaking */}
         {isSpeaker && (
           <div style={{ position: "absolute", left: "50%", top: "40%", transform: "translate(-50%,-50%)", width: 120, height: 120, borderRadius: "50%", pointerEvents: "none", zIndex: 0,
@@ -1616,7 +1686,7 @@ Greet ${arriving} now if this is the start.`;
         {!empty && !presenting && (
           <div style={{ marginTop: -34, position: "relative", zIndex: 3, opacity: dimmed ? 0.32 : 1, filter: dimmed ? "grayscale(0.7)" : "none", transition: "opacity .4s ease, filter .4s ease" }}>
             {(s.id === "victor" || s.id === "cfo" || s.id === "secretary" || s.id === "marketing" || s.id === "legal" || s.id === "product" || s.id === "guest") ? (
-              <div style={{ margin: "0 auto", width: 40, height: 40, transition: "transform .4s ease", transform: `${on ? "scale(1.12) translateY(-2px)" : someoneSpeaking ? "scale(0.96)" : "scale(1)"} rotate(${gazeTilt}deg)` }}>
+              <div style={{ margin: "0 auto", width: 40, height: 40, transition: "transform .4s ease", transform: `${on ? "scale(1.12) translateY(-2px)" : someoneSpeaking ? "scale(0.96)" : "scale(1)"} rotate(${gazeTilt}deg)`, animation: reactAnim }}>
                 <Avatar who={s.id === "cfo" ? "margaret" : s.id === "secretary" ? "ronda" : s.id === "marketing" ? "priya" : s.id === "legal" ? "desmond" : s.id === "product" ? "theo" : s.id === "guest" ? "guest" : "victor"} size={40} talking={on} />
               </div>
             ) : (
@@ -2393,7 +2463,7 @@ Greet ${arriving} now if this is the start.`;
           </div>
 
           {/* go in */}
-          <button onClick={() => { setArrivalStage("done"); setView("boardroom"); setPendingMeetingStart(true); }}
+          <button onClick={() => { setArrivalStage("done"); setView("boardroom"); setNeedsSeat(true); }}
             style={{ marginTop: 20, background: `${T.cyan}1E`, border: `1px solid ${T.cyan}`, color: T.cyan, borderRadius: 10, padding: "12px 28px", fontSize: 13, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1.5, cursor: "pointer", position: "relative", zIndex: 1 }}>
             GO IN TO THE BOARDROOM ▸
           </button>
@@ -2422,6 +2492,9 @@ Greet ${arriving} now if this is the start.`;
         *::-webkit-scrollbar{width:8px;height:8px}*::-webkit-scrollbar-thumb{background:${T.line};border-radius:8px}
         textarea:focus,input:focus{outline:none;border-color:${T.cyan}!important}
         @keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+        @keyframes reactNod { 0%,100% { transform: translateY(0); } 50% { transform: translateY(2px); } }
+        @keyframes reactLean { 0%,100% { transform: translateX(0) rotate(0deg); } 50% { transform: translateX(-1px) rotate(-2deg); } }
+        @keyframes reactStill { 0%,100% { opacity: 1; } 50% { opacity: 0.92; } }
         @keyframes cardBob { 0%,100% { transform: translateX(-50%) translateY(0); } 50% { transform: translateX(-50%) translateY(-6px); } }
         @keyframes rainFall { from { transform: translateY(0); } to { transform: translateY(90px); } }
         @keyframes snowFall { from { transform: translateY(0) translateX(0); } to { transform: translateY(90px) translateX(6px); } }
@@ -2468,6 +2541,16 @@ Greet ${arriving} now if this is the start.`;
         <button style={btn(meetingLive, T.violet)} onClick={() => { if (meetingLive) { setView("boardroom"); } else { callMeeting(); } }} disabled={loading}>
           {meetingLive ? "MEETING LIVE" : "CALL A MEETING"}
         </button>
+        {!meetingLive && (
+          <button style={btn(false, T.cyan)} onClick={() => callMeeting({ kind: "oneonone" })} disabled={loading} title="Private chat with just Victor">
+            1:1 WITH VICTOR
+          </button>
+        )}
+        {!meetingLive && (
+          <button style={btn(false, T.gold)} onClick={() => callMeeting({ kind: "huddle" })} disabled={loading} title="Fast 60-second standup">
+            QUICK HUDDLE
+          </button>
+        )}
         <div style={{ flex: 1 }} />
         <button style={btn(panel === "state")} onClick={() => setPanel(panel === "state" ? null : "state")}>DATA</button>
         <button style={btn(panel === "finance", finance ? T.gold : T.muted)} onClick={() => setPanel(panel === "finance" ? null : "finance")}>FINANCE</button>
@@ -2534,6 +2617,12 @@ Greet ${arriving} now if this is the start.`;
           </div>
 
           {view === "boardroom" && <Boardroom />}
+          {view === "boardroom" && needsSeat && (
+            <div style={{ position: "absolute", top: 14, left: "50%", transform: "translateX(-50%)", zIndex: 50, background: "#0a0e13e6", border: `1px solid ${T.cyan}`, borderRadius: 10, padding: "10px 18px", textAlign: "center", boxShadow: `0 6px 20px rgba(0,0,0,0.5)` }}>
+              <div style={{ fontSize: 12, color: T.cyan, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1 }}>The team is ready — take your seat</div>
+              <div style={{ fontSize: 10, color: T.muted, marginTop: 3 }}>Click your glowing chair to sit down and begin</div>
+            </div>
+          )}
 
           <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: narrow ? "12px" : "18px 24px", minHeight: 160 }}>
             {messages.length === 0 && !loading && (
