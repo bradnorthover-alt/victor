@@ -81,7 +81,7 @@ const store = {
     try { localStorage.setItem(k, v); } catch(e) { mem[k] = v; }
   },
 };
-const K = { msgs: "victor:messages", rules: "victor:rules", state: "victor:companystate",
+const K = { msgs: "victor:messages", rules: "victor:rules", state: "victor:companystate", roomstate: "victor:roomstate", drink: "victor:usualdrink",
   ledger: "victor:ledger", persona: "victor:persona", mode: "victor:mode", projects: "victor:projects", archive: "victor:archive", finance: "victor:finance", openactions: "victor:openactions", outcomes: "victor:outcomes" };
 
 // ---------- the system prompt that makes Victor, Victor ----------
@@ -165,6 +165,14 @@ CONTINUITY & HUMANITY (build a real, evolving working relationship over time \u2
 - EVOLVING OPINIONS OF EACH OTHER: The cast's read of each other can shift \u2014 Margaret grudgingly respects a Priya call that paid off; Theo defers to Desmond on a risk he flagged. Reference these lightly over time.
 - OPENING SMALL TALK: At the very start of a meeting (before business), a brief human beat is fine \u2014 a hello, a quick "how was the weekend," a comment on the late hour \u2014 one or two lines, then to work. Skip it in crisis mode.
 - FATIGUE BY MEETING LENGTH: If a meeting has run long (you'll see the elapsed time context), the room gets a touch more clipped and someone may suggest wrapping or a break (Rule 3). Energy is a real resource.
+
+MEETING INTELLIGENCE (make meetings genuinely productive):
+- WHAT CHANGED SINCE LAST TIME: When a meeting opens, briefly note what's new or moved since the last one \u2014 reference the most recent ledger decisions and any open action items, and whether they progressed. Keep it to a line or two.
+- DECISION REMINDERS: If a decision on the scorecard has sat "pending" for a while without an outcome, surface it and ask Brad where it landed \u2014 worked, didn't, or still open.
+- ACTION ITEM DUE DATES: When you log an action item, include a realistic timeframe in the owner|when format (e.g. "this week", "by Friday"). Ronda chases overdue ones.
+- AGENDA DISCIPLINE: If Brad gives you several topics, run them ONE at a time, naming the current item and checking it off before moving on. Don't blur them together.
+- WEEKLY CHECK-IN: If asked for a check-in or it's been a while, propose a short recurring agenda built from the open action items, pending decisions, and current mode \u2014 the 3 things most worth Brad's attention now.
+- END-OF-MEETING RECAP: When Brad adjourns, Ronda's read-back should be clean enough to send as-is to Jonathan \u2014 agenda, decision, owners, next steps.
 
 INVIOLABLE RULES \u2014 these override every recommendation. If an option breaks one, you do not recommend it; you say which rule and why:
 ${rules.map((r, i) => `${i + 1}. ${r}`).join("\n")}
@@ -285,7 +293,7 @@ function parseTags(raw) {
 }
 
 // tiny bold renderer for **x**, plus styled Confidence / Trade-off lines
-const SPEAKER_COLORS = { victor: "#4FD1E0", margaret: "#D8B45A", ronda: "#8B7FD6", jonathan: "#E8915B", brad: "#5FD08C", priya: "#3FC9A8", desmond: "#D86A8C", theo: "#6FA8E8", guest: "#C9A85F" };
+const SPEAKER_COLORS = { victor: "#4FD1E0", margaret: "#D8B45A", ronda: "#8B7FD6", jonathan: "#E8915B", brad: "#5FD08C", priya: "#3FC9A8", desmond: "#D86A8C", theo: "#6FA8E8", guest: "#C9A85F", vivian: "#C77FB0" };
 function fmtTime(ts) {
   if (!ts) return "";
   try { return new Date(ts).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }); } catch { return ""; }
@@ -361,6 +369,73 @@ export default function Victor() {
   const [realVoice, setRealVoice] = useState(false); // ElevenLabs real voices
   const audioElRef = useRef(null);
   const [view, setView] = useState("console"); // console | boardroom
+  // ===== ARRIVAL FLOW (elevator -> reception -> office) =====
+  const [arrivalStage, setArrivalStage] = useState("elevator"); // elevator | reception | done
+  const [elevatorFloor, setElevatorFloor] = useState(1);
+  const [myDrink, setMyDrink] = useState(""); // drink chosen at reception, shows in boardroom
+  const [vivianMsgs, setVivianMsgs] = useState([]); // reception conversation
+  const [vivianInput, setVivianInput] = useState("");
+  const [vivianLoading, setVivianLoading] = useState(false);
+  const [vivianGreeted, setVivianGreeted] = useState(false);
+  const [usualDrink, setUsualDrink] = useState(""); // remembered favorite
+  const elevAudioRef = useRef(null);
+
+  // Elevator ride: climb floors 1 -> 30 over ~30 seconds, then arrive at reception.
+  useEffect(() => {
+    if (arrivalStage !== "elevator") return;
+    setElevatorFloor(1);
+    const total = 30, dur = 30000;
+    const step = dur / total; // ms per floor
+    let f = 1;
+    const climb = setInterval(() => {
+      f += 1;
+      setElevatorFloor(f);
+      if (f >= total) { clearInterval(climb); setTimeout(() => setArrivalStage("reception"), 900); }
+    }, step);
+
+    // synthesized elevator muzak (gentle major-key arpeggio loop), only while riding
+    let stopMusic = () => {};
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) {
+        const ctx = new AC();
+        const master = ctx.createGain(); master.gain.value = 0.10; master.connect(ctx.destination);
+        // soft pad
+        const notes = [261.63, 329.63, 392.0, 523.25, 392.0, 329.63]; // C E G C G E
+        let i = 0; let alive = true;
+        const playNote = () => {
+          if (!alive) return;
+          const o = ctx.createOscillator(); const g = ctx.createGain();
+          o.type = "sine"; o.frequency.value = notes[i % notes.length];
+          const t = ctx.currentTime;
+          g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.5, t + 0.08); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.7);
+          // gentle vibraphone-ish second harmonic
+          const o2 = ctx.createOscillator(); const g2 = ctx.createGain();
+          o2.type = "triangle"; o2.frequency.value = notes[i % notes.length] * 2;
+          g2.gain.setValueAtTime(0.0001, t); g2.gain.linearRampToValueAtTime(0.15, t + 0.08); g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
+          o.connect(g); g.connect(master); o2.connect(g2); g2.connect(master);
+          o.start(t); o.stop(t + 0.75); o2.start(t); o2.stop(t + 0.65);
+          i++;
+        };
+        const musicInt = setInterval(playNote, 600);
+        playNote();
+        elevAudioRef.current = ctx;
+        stopMusic = () => { alive = false; clearInterval(musicInt); try { ctx.close(); } catch(e){} };
+      }
+    } catch(e) {}
+
+    return () => { clearInterval(climb); stopMusic(); };
+    // eslint-disable-next-line
+  }, [arrivalStage]);
+
+  // Vivian greets once when you arrive at reception.
+  useEffect(() => {
+    if (arrivalStage === "reception" && !vivianGreeted) {
+      setVivianGreeted(true);
+      callVivian("", true);
+    }
+    // eslint-disable-next-line
+  }, [arrivalStage]);
   const [panel, setPanel] = useState(null); // rules | ledger | state
   const [ambient, setAmbient] = useState("");
   const [agenda, setAgenda] = useState("");
@@ -389,11 +464,28 @@ export default function Victor() {
   const [roomSound, setRoomSound] = useState(false);
   const [liveMode, setLiveMode] = useState(false);
   const [liveHeard, setLiveHeard] = useState(""); // what it's currently hearing
+  const [listenPaused, setListenPaused] = useState(false); // pause mic without leaving LIVE
+  const [wakeWord, setWakeWord] = useState(false); // only act when addressed ("Victor, ...")
+  const listenPausedRef = useRef(false);
+  useEffect(() => { listenPausedRef.current = listenPaused; }, [listenPaused]);
+  const wakeWordRef = useRef(false);
+  useEffect(() => { wakeWordRef.current = wakeWord; }, [wakeWord]);
   const [charTalking, setCharTalking] = useState(false); // mirror for UI (a character is voicing)
   const recogRef = useRef(null);
   const liveModeRef = useRef(false);
   const charSpeakingRef = useRef(false); // true while a character voice is playing (mutes mic input)
   const [summoned, setSummoned] = useState([]); // advisor ids currently at the table
+  const [creditsUsed, setCreditsUsed] = useState(0); // estimated ElevenLabs credits this session
+  // persist boardroom state
+  useEffect(() => { store.set(K.roomstate, JSON.stringify({ summoned, timeOfDay })); }, [summoned, timeOfDay]);
+  // restore saved boardroom state once on load
+  useEffect(() => {
+    (async () => {
+      try { const rs = await store.get(K.roomstate); if (rs) { const o = JSON.parse(rs); if (o.summoned) setSummoned(o.summoned); if (o.timeOfDay) setTimeOfDay(o.timeOfDay); } } catch(e){}
+      try { const ud = await store.get(K.drink); if (ud) setUsualDrink(ud); } catch(e){}
+    })();
+    // eslint-disable-next-line
+  }, []);
   const [guestRole, setGuestRole] = useState(""); // optional custom guest descriptor
   const [timeOfDay, setTimeOfDay] = useState("night"); // day | dusk | night
   const [clockNow, setClockNow] = useState(new Date());
@@ -541,11 +633,17 @@ export default function Victor() {
   const speakReal = useCallback(async (who, text) => {
     if (!realVoice || !text || !text.trim()) return;
     const voiceId = VOICE_IDS[who] || VOICE_IDS.victor;
+    setCreditsUsed(c => c + Math.min(500, text.length)); // estimate: ~1 credit/char
+    let tune = { ...(VOICE_TUNE[who] || VOICE_TUNE.victor) };
+    // WHISPER IN CRISIS: in crisis mode the room is tenser — soften & steady the voices.
+    const lastMsgMode = [...messages].reverse().find(m => m.mode)?.mode;
+    const inCrisis = mode === "C" || (mode === "auto" && lastMsgMode === "C");
+    if (inCrisis) { tune.stability = Math.min(0.85, tune.stability + 0.2); tune.style = Math.max(0, tune.style - 0.15); }
     try {
       if (audioElRef.current) { audioElRef.current.pause(); audioElRef.current = null; }
       const res = await fetch("/api/voice", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: text.slice(0, 500), voiceId }),
+        body: JSON.stringify({ text: text.slice(0, 500), voiceId, tune }),
       });
       if (!res.ok) {
         let detail = "";
@@ -564,7 +662,7 @@ export default function Victor() {
       audio.onpause = () => { charSpeakingRef.current = false; setCharTalking(false); };
       audio.play().catch((e) => { charSpeakingRef.current = false; setCharTalking(false); setError("Audio blocked by browser — click the page once, then try again."); });
     } catch (e) { charSpeakingRef.current = false; setError("Voice fetch failed: " + String(e.message || e)); }
-  }, [realVoice]);
+  }, [realVoice, mode, messages]);
 
   // Stop whoever is speaking right now and hand the floor back to the user.
   const stopSpeaking = useCallback(() => {
@@ -573,6 +671,54 @@ export default function Victor() {
     charSpeakingRef.current = false; setCharTalking(false);
     setPlayIdx(-1);   // end the sequential playback so the room goes quiet
   }, []);
+
+  function buildVivianSystem() {
+    const now = new Date();
+    const hr = now.getHours();
+    const tod = hr < 12 ? "morning" : hr < 17 ? "afternoon" : "evening";
+    return `You are Vivian, the front-desk receptionist at Aurora Horizon Digital (a Canadian software startup, maker of MapleCheck). You are a warm, friendly, sharp, professional receptionist greeting Brad (the founder) as he arrives on the 30th floor.
+
+WHO YOU ARE: A real person doing the reception job well — welcoming, a little chatty, efficient, good memory for regulars. You take pride in running a smooth front desk.
+
+STAY STRICTLY IN YOUR ROLE:
+- You handle: greeting, small talk, checking who's in today, the meeting/where to go, and offering refreshments (coffee, tea, water, sparkling water).
+- You do NOT give business strategy, financial advice, product decisions, or opinions on company direction. Those are for Victor and the board. If Brad asks, warmly redirect: "Ooh, that's one for Victor and the team — I'll get you right in to them."
+- Keep it natural and human. This is ${tod}. ${usualDrink ? `Brad's usual order is: ${usualDrink} — feel free to greet him with "the usual?"` : "You don't know Brad's usual drink yet; once he picks one, remember it."}
+
+HOW YOU SPEAK: Brief, warm, natural — one to three sentences. Real receptionist energy, not robotic. You can comment on the weather, the late hour, how the climb up was, whether the team's expecting him.
+
+DRINK ORDERS: When Brad picks a drink (or you offer and he accepts), confirm it warmly and emit this tag on its own line so the kitchen knows: <<<DRINK: the drink>>> (e.g. <<<DRINK: coffee>>>). Only emit it when a drink is actually decided.
+
+Greet Brad now if this is the start.`;
+  }
+
+  async function callVivian(userText, isGreeting) {
+    const next = isGreeting ? [] : [...vivianMsgs, { role: "user", content: userText }];
+    if (!isGreeting) { setVivianMsgs(next); setVivianInput(""); }
+    setVivianLoading(true);
+    try {
+      const res = await fetch("/api/claude", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-6", max_tokens: 400,
+          system: buildVivianSystem(),
+          messages: (isGreeting ? [{ role: "user", content: "(Brad has just stepped off the elevator at reception.)" }] : next).map(m => ({ role: m.role, content: m.content })),
+        }),
+      });
+      const data = await res.json();
+      let raw = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("\n").trim();
+      // capture drink
+      const dm = raw.match(/<<<DRINK:([^>]*)>>>/);
+      if (dm) { const d = dm[1].trim(); setMyDrink(d); setUsualDrink(d); store.set(K.drink, d); }
+      raw = raw.replace(/<<<DRINK:[^>]*>>>/g, "").trim();
+      const out = [...next, { role: "assistant", content: raw }];
+      setVivianMsgs(out);
+      speakReal("vivian", raw);
+    } catch (e) {
+      setVivianMsgs(prev => [...prev, { role: "assistant", content: "Welcome to Aurora Horizon! Go right in — they're expecting you." }]);
+    }
+    setVivianLoading(false);
+  }
 
   async function callVictor(userText, opts = {}) {
     // In a shared room, tell Victor who is speaking so he can address them by name.
@@ -648,6 +794,59 @@ export default function Victor() {
     );
   }
 
+
+  async function exportAll() {
+    try {
+      const dump = {
+        exportedAt: new Date().toISOString(),
+        company: "Aurora Horizon Digital",
+        messages: messages, data: companyState, finance, projects, rules,
+        ledger, outcomes, openActions, meetingArchive,
+      };
+      const blob = new Blob([JSON.stringify(dump, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "victor-backup-" + new Date().toISOString().slice(0,10) + ".json";
+      a.click(); URL.revokeObjectURL(url);
+    } catch(e) { setError("Export failed: " + String(e.message||e)); }
+  }
+
+  function printReport(rec) {
+    const d = new Date(rec.when);
+    const w = window.open("", "_blank");
+    if (!w) return;
+    const esc = s => String(s||"").replace(/[<>&]/g, c => ({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));
+    const acts = (rec.actions||[]).map(a => { const [t,o,wn]=String(a).split("|").map(s=>s.trim()); return `<li>${esc(t)}${o?" — <b>"+esc(o)+"</b>":""}${wn?" ("+esc(wn)+")":""}</li>`; }).join("");
+    const mins = (rec.minutes||[]).map(m => `<li>${esc(typeof m==="string"?m:m.text)}</li>`).join("");
+    w.document.write(`<html><head><title>Meeting Report</title><style>body{font-family:Georgia,serif;max-width:680px;margin:40px auto;color:#111;line-height:1.5}h1{font-size:20px}h2{font-size:13px;letter-spacing:1px;color:#666;text-transform:uppercase;margin-top:20px}</style></head><body><h1>Meeting Report — Aurora Horizon Digital</h1><div>${d.toLocaleString()}</div><h2>Agenda</h2><div>${esc(rec.agenda||"(none)")}</div>${rec.decided?`<h2>Decision</h2><div>${esc(rec.decided)}</div>`:""}${acts?`<h2>Action Items</h2><ul>${acts}</ul>`:""}${mins?`<h2>Minutes</h2><ul>${mins}</ul>`:""}</body></html>`);
+    w.document.close(); w.focus(); setTimeout(()=>w.print(), 300);
+  }
+
+  function emailRecap(rec) {
+    const d = new Date(rec.when);
+    const subj = encodeURIComponent("Meeting recap \u2014 " + (rec.agenda || "Aurora Horizon") + " (" + d.toLocaleDateString() + ")");
+    const lines = [];
+    lines.push("Hi Jonathan,");
+    lines.push("");
+    lines.push("Quick recap from the meeting on " + d.toLocaleString() + ":");
+    lines.push("");
+    lines.push("Agenda: " + (rec.agenda || "(none)"));
+    if (rec.decided) lines.push("Decision: " + rec.decided);
+    if (rec.actions && rec.actions.length) {
+      lines.push("");
+      lines.push("Action items:");
+      rec.actions.forEach(a => { const [t,o,w] = String(a).split("|").map(s=>s.trim()); lines.push("  - " + t + (o?" ["+o+"]":"") + (w?" ("+w+")":"")); });
+    }
+    if (rec.minutes && rec.minutes.length) {
+      lines.push("");
+      lines.push("Notes:");
+      rec.minutes.forEach(m => { const mt = typeof m === "string" ? m : m.text; lines.push("  \u2022 " + mt); });
+    }
+    lines.push("");
+    lines.push("\u2014 Brad");
+    const body = encodeURIComponent(lines.join("\n"));
+    window.location.href = "mailto:?subject=" + subj + "&body=" + body;
+  }
 
   function exportReport(rec) {
     const d = new Date(rec.when);
@@ -880,12 +1079,19 @@ export default function Victor() {
         if (e.results[i].isFinal) finalText += t; else interim += t;
       }
       const heard = (finalText + " " + interim).trim();
+      if (listenPausedRef.current) { setLiveHeard(""); return; } // paused: ignore input
       setLiveHeard(heard);
       // Debounced send: when speech settles for ~1.1s, send it.
       if (pauseTimer) clearTimeout(pauseTimer);
       pauseTimer = setTimeout(() => {
-        const toSend = (finalText || interim).trim();
+        let toSend = (finalText || interim).trim();
         if (toSend && toSend.length > 1 && liveModeRef.current && !loading) {
+          // WAKE WORD: if on, only respond when a name is addressed; strip the name before sending.
+          if (wakeWordRef.current) {
+            const m = toSend.match(/\b(victor|margaret|ronda|priya|desmond|theo|team|everyone)\b[,:\s]*(.*)$/i);
+            if (!m) { setLiveHeard(""); finalText = ""; return; }
+            toSend = (m[1] + ", " + (m[2] || "")).trim();
+          }
           setLiveHeard("");
           finalText = "";
           callVictor(toSend);
@@ -907,6 +1113,33 @@ export default function Victor() {
     return () => { try { rec.stop(); } catch(e){} recogRef.current = null; if (pauseTimer) clearTimeout(pauseTimer); };
     // eslint-disable-next-line
   }, [liveMode]);
+
+  // ===== AUTONOMOUS CAST CHATTER (Pass 2) =====
+  // During a LIVE meeting, the cast occasionally volunteers a short in-character remark on its own.
+  // Rate-limited, only when no one is speaking and the user isn't mid-thought, to protect credits + sanity.
+  const lastChatterRef = useRef(0);
+  useEffect(() => {
+    if (!liveMode || !meetingLive) return;
+    const tick = setInterval(() => {
+      const now = Date.now();
+      // guardrails: at most one every ~40s; skip if loading, a character is speaking, or the user is talking
+      if (now - lastChatterRef.current < 40000) return;
+      if (loading || charSpeakingRef.current || liveHeard) return;
+      // 50% chance each eligible tick, so it feels spontaneous not clockwork
+      if (Math.random() < 0.5) return;
+      lastChatterRef.current = now;
+      // pick who's present: core cast + any summoned advisors
+      const present = ["margaret", "ronda", ...summoned.map(id => ({ marketing: "priya", legal: "desmond", product: "theo", guest: "guest" }[id])).filter(Boolean)];
+      const who = present[Math.floor(Math.random() * present.length)] || "ronda";
+      const nameMap = { margaret: "Margaret", ronda: "Ronda", priya: "Priya", desmond: "Desmond", theo: "Theo", guest: "Guest" };
+      callVictor(
+        `(No new input from Brad. ${nameMap[who]} volunteers a brief, in-character remark on their own — a quick observation, concern, or follow-up tied to what's on the table or the open items. ONE short turn only, marked [${nameMap[who]}], one or two sentences. Do not restate the whole discussion.)`,
+        { noTags: true, autonomous: true }
+      );
+    }, 8000); // check every 8s
+    return () => clearInterval(tick);
+    // eslint-disable-next-line
+  }, [liveMode, meetingLive, loading, liveHeard, summoned]);
 
   // Soft click when the slide advances (only if sound is on).
   useEffect(() => {
@@ -940,6 +1173,17 @@ export default function Victor() {
   }
   const NAME_TO_SEAT = { victor: "victor", margaret: "cfo", ronda: "secretary", priya: "marketing", desmond: "legal", theo: "product", guest: "guest" };
   // ElevenLabs preset voice IDs per character (public voices, free-tier friendly)
+  // Per-character voice tuning: stability (lower=more expressive), style (higher=more emphatic), speed feel.
+  const VOICE_TUNE = {
+    victor:   { stability: 0.55, similarity_boost: 0.85, style: 0.25 }, // measured, controlled
+    margaret: { stability: 0.65, similarity_boost: 0.8,  style: 0.15 }, // clipped, precise
+    ronda:    { stability: 0.5,  similarity_boost: 0.85, style: 0.35 }, // warm, easy
+    priya:    { stability: 0.35, similarity_boost: 0.85, style: 0.55 }, // energetic, expressive
+    desmond:  { stability: 0.7,  similarity_boost: 0.8,  style: 0.1  }, // careful, even
+    theo:     { stability: 0.45, similarity_boost: 0.85, style: 0.4  }, // casual
+    guest:    { stability: 0.5,  similarity_boost: 0.8,  style: 0.3  },
+    vivian:   { stability: 0.45, similarity_boost: 0.85, style: 0.45 }, // warm, welcoming
+  };
   const VOICE_IDS = {
     victor: "onwK4e9ZLuTAKqWW03F9",   // Daniel — authoritative male
     margaret: "XB0fDUnXU5powFXDhCwa", // Charlotte — crisp female
@@ -948,6 +1192,7 @@ export default function Victor() {
     desmond: "nPczCjzI2devNBz1zQrb",  // Brian — measured, resonant male (premium)
     theo: "bIHbv24MWmeRgasZH58o",     // Will — casual, friendly male (premium)
     guest: "cjVigY5qzO86Huf0OWal",    // Eric — neutral male (premium)
+    vivian: "pFZP5JQG7iQjIQuC4Bku",   // Lily — warm, friendly receptionist
   };
 
   function stripStage(s) {
@@ -1120,6 +1365,17 @@ export default function Victor() {
           <circle cx="36" cy="26" r="1.5" fill={c} />
         </g>
       ),
+      vivian: (
+        <g>
+          {/* friendly receptionist with a bob */}
+          <path d="M19 28 q0 -16 13 -16 q13 0 13 16 q0 4 -2 7 l-3 -3 q1 -8 -8 -8 q-9 0 -8 8 l-3 3 q-2 -3 -2 -7 z" fill={`${c}22`} stroke={c} strokeWidth="1.3" />
+          <circle cx="32" cy="28" r="11" fill={`${c}10`} stroke={c} strokeWidth="1.5" />
+          <path d="M18 52 q0 -15 14 -15 q14 0 14 15 z" fill={`${c}14`} stroke={c} strokeWidth="1.5" />
+          <circle cx="28" cy="28" r="1.6" fill={c} />
+          <circle cx="36" cy="28" r="1.6" fill={c} />
+          <path d="M28 34 q4 4 8 0" stroke={c} strokeWidth="1.3" fill="none" strokeLinecap="round" />
+        </g>
+      ),
     };
     return (
       <svg width={size} height={size} viewBox="0 0 64 64"
@@ -1253,6 +1509,11 @@ export default function Victor() {
             {/* clothing hint: collar bar */}
             {!empty && !dimmed && <div style={{ width: 20, height: 4, margin: "1px auto 0", borderRadius: "0 0 3px 3px", background: `linear-gradient(180deg, ${s.color}88, ${s.color}33)` }} />}
             <div style={{ fontSize: 10, color: dimmed ? T.muted : s.color, marginTop: 3, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 0.5 }}>{displayName}</div>
+            {s.id === "brad" && myDrink && (
+              <div title={"Vivian brought your " + myDrink.toLowerCase()} style={{ position: "absolute", top: -2, right: 4, fontSize: 13 }}>
+                {/coffee|tea/i.test(myDrink) ? "☕" : "🥤"}
+              </div>
+            )}
             <div style={{ fontSize: 8, color: T.muted, letterSpacing: 1 }}>{dimmed ? "NOT JOINED" : s.role.toUpperCase()}</div>
             {on && !dimmed && <div style={{ fontSize: 8, color: s.color, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1 }}>● SPEAKING</div>}
           </div>
@@ -1769,14 +2030,118 @@ export default function Victor() {
 
   return (
     <div style={wrap}>
+      {arrivalStage === "elevator" && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "#06090d", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+          {/* floor indicator */}
+          <div style={{ marginBottom: 26, textAlign: "center" }}>
+            <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, letterSpacing: 4, color: T.muted, marginBottom: 8 }}>AURORA HORIZON DIGITAL</div>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 10, border: `1px solid ${T.cyan}55`, borderRadius: 10, padding: "8px 20px", background: "rgba(9,14,20,0.8)" }}>
+              <span style={{ color: T.cyan, fontSize: 13, animation: "pulse 1.2s infinite" }}>▲</span>
+              <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 30, fontWeight: 700, color: T.cyan, letterSpacing: 2, minWidth: 78, textAlign: "center" }}>{elevatorFloor}</span>
+              <span style={{ fontSize: 10, color: T.muted, letterSpacing: 1 }}>FLOOR</span>
+            </div>
+            <div style={{ width: 240, height: 4, background: T.lineSoft, borderRadius: 2, margin: "14px auto 0", overflow: "hidden" }}>
+              <div style={{ width: `${(elevatorFloor/30)*100}%`, height: "100%", background: T.cyan, transition: "width .9s linear" }} />
+            </div>
+          </div>
+
+          {/* the elevator doors */}
+          <div style={{ position: "relative", width: 300, height: 340, border: `2px solid ${T.line}`, borderRadius: 8, overflow: "hidden", boxShadow: `0 0 50px rgba(0,0,0,0.6)`, background: "#0a0e13" }}>
+            {/* door seam + panels */}
+            <div style={{ position: "absolute", inset: 0, display: "flex" }}>
+              <div style={{ width: "50%", height: "100%", background: "linear-gradient(90deg,#161d26,#0e141b)", borderRight: `1px solid ${T.cyan}22`,
+                transform: elevatorFloor >= 30 ? "translateX(-100%)" : "translateX(0)", transition: "transform 1.4s ease-in-out" }}>
+                <div style={{ position: "absolute", right: 6, top: "48%", width: 3, height: 30, background: T.cyanDim, borderRadius: 2, opacity: 0.5 }} />
+              </div>
+              <div style={{ width: "50%", height: "100%", background: "linear-gradient(270deg,#161d26,#0e141b)", borderLeft: `1px solid ${T.cyan}22`,
+                transform: elevatorFloor >= 30 ? "translateX(100%)" : "translateX(0)", transition: "transform 1.4s ease-in-out" }}>
+                <div style={{ position: "absolute", left: 6, top: "48%", width: 3, height: 30, background: T.cyanDim, borderRadius: 2, opacity: 0.5 }} />
+              </div>
+            </div>
+            {/* glow behind doors as they open */}
+            {elevatorFloor >= 30 && <div style={{ position: "absolute", inset: 0, background: "radial-gradient(circle at center, rgba(79,209,224,0.15), transparent 70%)", zIndex: -1 }} />}
+          </div>
+
+          <div style={{ marginTop: 22, fontSize: 12, color: T.muted, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1 }}>
+            {elevatorFloor >= 30 ? "Arriving…" : "Going up…"}
+          </div>
+          <button onClick={() => { if (elevAudioRef.current) { try { elevAudioRef.current.close(); } catch(e){} } setArrivalStage("reception"); }}
+            style={{ marginTop: 18, background: "transparent", border: `1px solid ${T.lineSoft}`, color: T.muted, borderRadius: 8, padding: "6px 16px", fontSize: 11, fontFamily: "'JetBrains Mono',monospace", cursor: "pointer", letterSpacing: 1 }}>
+            SKIP ▸
+          </button>
+        </div>
+      )}
+
+      {arrivalStage === "reception" && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "linear-gradient(180deg,#0a0e13,#070a0e)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 20, overflowY: "auto" }}>
+          {/* reception desk header */}
+          <div style={{ textAlign: "center", marginBottom: 8 }}>
+            <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, letterSpacing: 4, color: T.muted }}>RECEPTION · 30TH FLOOR</div>
+            <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, letterSpacing: 2, color: T.cyan, marginTop: 4 }}>AURORA HORIZON DIGITAL</div>
+          </div>
+
+          {/* Vivian */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "14px 0 6px" }}>
+            <div style={{ width: 64, height: 64 }}><Avatar who="vivian" size={64} talking={vivianLoading} /></div>
+            <div>
+              <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 14, letterSpacing: 1.5, color: T.violet, fontWeight: 600 }}>VIVIAN</div>
+              <div style={{ fontSize: 10, color: T.muted, letterSpacing: 1 }}>RECEPTIONIST</div>
+            </div>
+          </div>
+
+          {/* conversation */}
+          <div style={{ width: "100%", maxWidth: 440, maxHeight: 220, overflowY: "auto", margin: "8px 0", display: "flex", flexDirection: "column", gap: 8 }}>
+            {vivianMsgs.map((m, i) => (
+              <div key={i} style={{ alignSelf: m.role === "user" ? "flex-end" : "flex-start", maxWidth: "85%", background: m.role === "user" ? T.panel : `${T.violet}14`, border: `1px solid ${m.role === "user" ? T.lineSoft : T.violet + "44"}`, borderRadius: 10, padding: "8px 12px", fontSize: 13.5, lineHeight: 1.45, color: T.text }}>
+                {m.content}
+              </div>
+            ))}
+            {vivianLoading && <div style={{ alignSelf: "flex-start", color: T.violet, fontSize: 12, fontFamily: "'JetBrains Mono',monospace" }}>…</div>}
+          </div>
+
+          {/* drink quick-picks */}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", margin: "6px 0" }}>
+            {["Coffee","Tea","Water","Sparkling water"].map(d => (
+              <button key={d} onClick={() => callVivian("I'll have a " + d.toLowerCase() + ", thanks.", false)} disabled={vivianLoading}
+                style={{ background: myDrink.toLowerCase() === d.toLowerCase() ? `${T.cyan}22` : "transparent", border: `1px solid ${myDrink.toLowerCase() === d.toLowerCase() ? T.cyan : T.lineSoft}`, color: myDrink.toLowerCase() === d.toLowerCase() ? T.cyan : T.muted, borderRadius: 16, padding: "6px 14px", fontSize: 12, cursor: "pointer" }}>
+                {d === "Coffee" ? "☕" : d === "Tea" ? "🍵" : "💧"} {d}
+              </button>
+            ))}
+          </div>
+
+          {/* talk to vivian */}
+          <div style={{ width: "100%", maxWidth: 440, display: "flex", gap: 8, marginTop: 6 }}>
+            <input value={vivianInput} onChange={e => setVivianInput(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && vivianInput.trim() && !vivianLoading) callVivian(vivianInput.trim(), false); }}
+              placeholder="Say hi to Vivian…" 
+              style={{ flex: 1, background: T.panel, color: T.text, border: `1px solid ${T.line}`, borderRadius: 10, padding: "10px 12px", fontSize: 13, fontFamily: "inherit" }} />
+            <button onClick={() => { if (vivianInput.trim() && !vivianLoading) callVivian(vivianInput.trim(), false); }} disabled={vivianLoading || !vivianInput.trim()}
+              style={{ background: vivianInput.trim() ? T.violet : T.panel, color: vivianInput.trim() ? T.ink : T.muted, border: "none", borderRadius: 10, padding: "10px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'JetBrains Mono',monospace" }}>SAY</button>
+          </div>
+
+          {/* go in */}
+          <button onClick={() => { setArrivalStage("done"); setView("boardroom"); }}
+            style={{ marginTop: 20, background: `${T.cyan}1E`, border: `1px solid ${T.cyan}`, color: T.cyan, borderRadius: 10, padding: "12px 28px", fontSize: 13, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1.5, cursor: "pointer" }}>
+            GO IN TO THE MEETING ▸
+          </button>
+          {myDrink && <div style={{ marginTop: 10, fontSize: 11, color: T.muted }}>Vivian will bring your {myDrink.toLowerCase()} in.</div>}
+        </div>
+      )}
+
       {liveMode && (
         <div style={{ position: "fixed", bottom: 18, left: "50%", transform: "translateX(-50%)", zIndex: 60, background: "rgba(9,14,20,0.95)", border: `1px solid ${T.green}66`, borderRadius: 24, padding: "10px 18px", display: "flex", alignItems: "center", gap: 10, maxWidth: "90%", boxShadow: `0 4px 20px rgba(0,0,0,0.5)` }}>
           <span style={{ width: 10, height: 10, borderRadius: "50%", background: charTalking ? T.amber : T.green, boxShadow: `0 0 10px ${charTalking ? T.amber : T.green}`, animation: "pulse 1s infinite" }} />
           <span style={{ fontSize: 13, color: liveHeard ? T.text : T.muted, fontFamily: "'JetBrains Mono',monospace", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 360 }}>
-            {charTalking ? "Speaking… (say \"stop\" or tap)" : (liveHeard || "Listening… just talk")}
+            {charTalking ? "Speaking… (say \"stop\" or tap)" : listenPaused ? "Paused — tap resume" : wakeWord ? (liveHeard || "Address someone by name…") : (liveHeard || "Listening… just talk")}
           </span>
           {charTalking && (
             <button onClick={stopSpeaking} style={{ background: `${T.amber}22`, border: `1px solid ${T.amber}`, color: T.amber, borderRadius: 14, padding: "4px 12px", fontSize: 11, fontWeight: 600, fontFamily: "'JetBrains Mono',monospace", cursor: "pointer", letterSpacing: 1 }}>■ STOP</button>
+          )}
+          {!charTalking && (
+            <button onClick={() => setListenPaused(p => !p)} title="Pause/resume listening" style={{ background: listenPaused ? `${T.amber}22` : "transparent", border: `1px solid ${listenPaused ? T.amber : T.lineSoft}`, color: listenPaused ? T.amber : T.muted, borderRadius: 14, padding: "4px 10px", fontSize: 11, fontFamily: "'JetBrains Mono',monospace", cursor: "pointer" }}>{listenPaused ? "▶ RESUME" : "❚❚ PAUSE"}</button>
+          )}
+          {!charTalking && (
+            <button onClick={() => setWakeWord(w => !w)} title="Only respond when you address someone by name" style={{ background: wakeWord ? `${T.cyan}22` : "transparent", border: `1px solid ${wakeWord ? T.cyan : T.lineSoft}`, color: wakeWord ? T.cyan : T.muted, borderRadius: 14, padding: "4px 10px", fontSize: 11, fontFamily: "'JetBrains Mono',monospace", cursor: "pointer" }}>{wakeWord ? "🔔 NAMED" : "🔔 OPEN"}</button>
           )}
         </div>
       )}
@@ -1840,6 +2205,7 @@ export default function Victor() {
         <button style={btn(realVoice, T.cyan)} onClick={() => { setRealVoice(v => !v); if (realVoice && audioElRef.current) { audioElRef.current.pause(); } }} title="Natural ElevenLabs voices">REAL VOICE {realVoice ? "ON" : "OFF"}</button>
         <button style={btn(roomSound, T.cyanDim)} onClick={() => setRoomSound(s => !s)} title="Ambient room & city sound (all views)">♪ AMBIENCE {roomSound ? "ON" : "OFF"}</button>
         <button style={btn(liveMode, T.green)} onClick={() => { setLiveMode(v => !v); if (!liveMode && !realVoice) setRealVoice(true); }} title="Hands-free voice conversation — just talk">🎙 LIVE {liveMode ? "ON" : "OFF"}</button>
+        {creditsUsed > 0 && <span style={{ fontSize: 10, color: T.muted, fontFamily: "'JetBrains Mono',monospace", alignSelf: "center", padding: "0 4px" }} title="Estimated ElevenLabs credits used this session">~{creditsUsed} credits</span>}
         <button style={btn(panel === "room", roomCode ? T.green : T.muted)} onClick={() => setPanel(panel === "room" ? null : "room")}>
           {roomCode ? `ROOM ${roomCode}` : "JOIN / START"}
         </button>
@@ -2065,9 +2431,10 @@ export default function Victor() {
                     ))}
                   </div>
                 )}
-                <div style={{ fontSize: 12, color: T.muted, marginBottom: 14, lineHeight: 1.5 }}>
+                <div style={{ fontSize: 12, color: T.muted, marginBottom: 10, lineHeight: 1.5 }}>
                   Every meeting you adjourn is archived here \u2014 agenda, decision, action items, and Ronda's minutes. Newest first.
                 </div>
+                <button style={{ ...btn(false, T.cyan), marginBottom: 14, width: "100%" }} onClick={exportAll}>\u2913 EXPORT ALL DATA (backup .json)</button>
                 {meetingArchive.length === 0 && (
                   <div style={{ color: T.muted, fontSize: 13, padding: "20px 0", textAlign: "center" }}>
                     No meetings archived yet. Call a meeting, work it, then hit ADJOURN MEETING to save a report here.
@@ -2099,6 +2466,8 @@ export default function Victor() {
                       </>)}
                       <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
                         <button style={{ ...btn(false, T.cyan), fontSize: 11 }} onClick={() => exportReport(rec)}>EXPORT</button>
+                        <button style={{ ...btn(false, T.cyanDim), fontSize: 11 }} onClick={() => printReport(rec)}>PRINT</button>
+                        <button style={{ ...btn(false, T.green), fontSize: 11 }} onClick={() => emailRecap(rec)}>EMAIL RECAP</button>
                         <button style={{ ...btn(false, T.amber), fontSize: 11 }} onClick={() => { const na = meetingArchive.filter((_, k) => k !== (meetingArchive.length - 1 - i)); setMeetingArchive(na); store.set(K.archive, JSON.stringify(na)); }}>DELETE</button>
                       </div>
                     </div>
