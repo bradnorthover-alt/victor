@@ -398,9 +398,14 @@ export default function Victor() {
 
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [streamPreview, setStreamPreview] = useState(""); // live text as Victor generates
+  const [liveTurns, setLiveTurns] = useState(null); // turns fed in live during streaming (Option 2)
+  const streamPlayingRef = useRef(false);
+  const liveTurnsRef = useRef(null);
   const [error, setError] = useState("");
   const [voiceOn, setVoiceOn] = useState(false);
   const [realVoice, setRealVoice] = useState(false); // ElevenLabs real voices
+  const [announceNames, setAnnounceNames] = useState(true); // narrator announces each speaker by name
   const audioElRef = useRef(null);
   const [view, setView] = useState("console"); // console | boardroom
   // ===== ARRIVAL FLOW (elevator -> reception -> office) =====
@@ -469,7 +474,7 @@ export default function Victor() {
     const climb = setInterval(() => {
       f += 1;
       setElevatorFloor(f);
-      if (f >= total) { clearInterval(climb); setTimeout(() => setArrivalStage("reception"), 900); }
+      if (f >= total) { clearInterval(climb); narrateScene("The doors open onto the thirtieth floor."); setTimeout(() => setArrivalStage("reception"), 900); }
     }, step);
 
     // music is started by the elevator tap; this effect only ensures it stops when the ride ends
@@ -810,6 +815,19 @@ export default function Victor() {
     }
   }, [speakRealAwait, realVoice]);
 
+  // Announce a speaker by name in the narrator voice, then speak their turn.
+  const lastAnnouncedRef = useRef(null);
+  const speakTurnAnnounced = useCallback(async (who, rawText, force) => {
+    const NAMES = { victor: "Victor", margaret: "Margaret", ronda: "Ronda", priya: "Priya", desmond: "Desmond", theo: "Theo", guest: "Guest", vivian: "Vivian" };
+    const name = NAMES[who];
+    // only announce when the speaker changes (don't repeat the same name back to back)
+    if (announceNames && name && lastAnnouncedRef.current !== who) {
+      lastAnnouncedRef.current = who;
+      await speakRealAwait("narrator", name + ".", true);
+    }
+    await speakTurn(who, rawText, force);
+  }, [speakTurn, speakRealAwait, announceNames]);
+
 
   // Stop whoever is speaking right now and hand the floor back to the user.
   const stopSpeaking = useCallback(() => {
@@ -886,12 +904,66 @@ Greet ${arriving} now if this is the start.`;
           model: "claude-sonnet-4-6",
           max_tokens: 600,
           system,
-          // send only the recent history (last ~16 messages) so each call is lighter and faster
+          stream: true, // stream tokens so words appear as they're generated
           messages: next.slice(-16).map(m => ({ role: m.role, content: m.content })),
         }),
       });
-      const data = await res.json();
-      const raw = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("\n").trim();
+
+      let raw = "";
+      const ctype = res.headers.get("content-type") || "";
+      if (ctype.includes("text/event-stream") && res.body) {
+        // Read the SSE stream and accumulate text deltas live.
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = "";
+        setStreamPreview("");
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split("\n");
+          buf = lines.pop(); // keep the last partial line
+          for (const line of lines) {
+            const s = line.trim();
+            if (!s.startsWith("data:")) continue;
+            const payload = s.slice(5).trim();
+            if (payload === "[DONE]" || !payload) continue;
+            try {
+              const evt = JSON.parse(payload);
+              if (evt.type === "content_block_delta" && evt.delta && evt.delta.text) {
+                raw += evt.delta.text;
+                // show a clean live preview (hide the control tags as they stream in)
+                const preview = raw.replace(/<<<[^>]*>?>?>?/g, "").replace(/\[[A-Za-z]+\]/g, "").trim();
+                setStreamPreview(preview);
+                // OPTION 2: feed COMPLETE turns to the player as soon as they're ready.
+                // A turn is "complete" once a later [Name] or a system tag appears after it.
+                if (opts.meeting && realVoice) {
+                  const stripped = raw.replace(/<<<[^>]*>?>?>?/g, "");
+                  // only parse up to the last newline that's followed by more content (i.e. finished lines)
+                  const lastNL = stripped.lastIndexOf("\n");
+                  if (lastNL > 0) {
+                    const safeText = stripped.slice(0, lastNL);
+                    const parsed = parseTurns(safeText);
+                    if (parsed.length > 0) {
+                      setLiveTurns(prev => {
+                        // only update if we have MORE complete turns than before
+                        if (!prev || parsed.length > prev.length) return parsed;
+                        return prev;
+                      });
+                    }
+                  }
+                }
+              }
+            } catch (e) { /* ignore partial json */ }
+          }
+        }
+        setStreamPreview("");
+      } else {
+        // fallback: non-streaming JSON
+        const data = await res.json();
+        raw = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("\n").trim();
+      }
+      raw = raw.trim();
       if (!raw) throw new Error("Victor returned nothing. Try again.");
       const { text, mode: nm, persona: np, ledger: nl, agenda: ag, actions: ac, minutes: mn, deckTitle: dt, slides: sl, voteQ: vq, victorVote: vv, board: bd } = parseTags(raw);
 
@@ -978,6 +1050,11 @@ Greet ${arriving} now if this is the start.`;
       }
       setTimeout(() => { try { ctx.close(); } catch(e){} }, 800);
     } catch(e){}
+  }
+
+  // Narrate a scene transition in the narrator voice (spoken, forced so it plays regardless of toggle).
+  function narrateScene(line) {
+    try { speakRealAwait("narrator", line, true); } catch(e){}
   }
 
   // When you click your seat to sit down, settle in briefly, then the meeting begins.
@@ -1430,12 +1507,30 @@ Greet ${arriving} now if this is the start.`;
 
   const [playIdx, setPlayIdx] = useState(-1);   // which turn is currently "speaking" (-1 = none)
   const [caption, setCaption] = useState("");    // typed-out caption text
-  const turns = useMemo(() => parseTurns(lastVictorMsg?.content || ""), [lastVictorMsg]);
+  const finalTurns = useMemo(() => parseTurns(lastVictorMsg?.content || ""), [lastVictorMsg]);
+  // While streaming, play the live turns; once the final message lands, use its parsed turns.
+  const turns = (liveTurns && liveTurns.length > 0 && (!lastVictorMsg || streamPlayingRef.current)) ? liveTurns : finalTurns;
 
-  // Start playback whenever a new assistant message arrives.
+  useEffect(() => { liveTurnsRef.current = liveTurns; }, [liveTurns]);
+  // Start playback as soon as the FIRST live turn is ready (streaming), or when a new message arrives.
   useEffect(() => {
-    if (!lastVictorMsg || turns.length === 0) { setPlayIdx(-1); return; }
-    setPlayIdx(0);
+    if (liveTurns && liveTurns.length > 0 && playIdx === -1) {
+      streamPlayingRef.current = true;
+      lastAnnouncedRef.current = null;
+      setPlayIdx(0);
+    }
+    // eslint-disable-next-line
+  }, [liveTurns]);
+  useEffect(() => {
+    // when the final message arrives, if we never started (non-meeting or no live turns), start now
+    if (!lastVictorMsg) return;
+    if (!streamPlayingRef.current) {
+      if (finalTurns.length === 0) { setPlayIdx(-1); return; }
+      setPlayIdx(0);
+    }
+    // clear the live buffer now that the final, authoritative turns exist
+    setLiveTurns(null);
+    streamPlayingRef.current = false;
     // eslint-disable-next-line
   }, [lastVictorMsg]);
 
@@ -1461,7 +1556,21 @@ Greet ${arriving} now if this is the start.`;
       advanced = true;
       beat = setTimeout(() => {
         if (cancelled) return;
-        setPlayIdx(playIdx + 1 < turns.length ? playIdx + 1 : -1);
+        if (playIdx + 1 < turns.length) { setPlayIdx(playIdx + 1); return; }
+        // no next turn yet — if we're still streaming, wait for it; else end.
+        if (streamPlayingRef.current) {
+          // poll for the next turn to arrive (up to ~6s) before giving up
+          let waited = 0;
+          const waiter = setInterval(() => {
+            if (cancelled) { clearInterval(waiter); return; }
+            const live = liveTurnsRef.current;
+            if (live && live.length > playIdx + 1) { clearInterval(waiter); setPlayIdx(playIdx + 1); return; }
+            if (!streamPlayingRef.current) { clearInterval(waiter); setPlayIdx(playIdx + 1 < (liveTurnsRef.current?.length || 0) ? playIdx + 1 : -1); return; }
+            waited += 150; if (waited > 6000) { clearInterval(waiter); setPlayIdx(-1); }
+          }, 150);
+        } else {
+          setPlayIdx(-1);
+        }
       }, 130); // tight, natural turn-taking gap
     };
 
@@ -1476,7 +1585,7 @@ Greet ${arriving} now if this is the start.`;
     // If voice is OFF (realVoice false and not forced), speakTurn returns immediately; fall back to a read-time timer.
     let fallbackTimer = null;
     if (realVoice) {
-      Promise.resolve(speakTurn(turn.who, turn.raw || said)).then(advance).catch(advance);
+      Promise.resolve(speakTurnAnnounced(turn.who, turn.raw || said)).then(advance).catch(advance);
     } else {
       // text-only mode: pace by reading time so it doesn't blast through instantly
       fallbackTimer = setTimeout(advance, typeDur + 400);
@@ -2381,9 +2490,9 @@ Greet ${arriving} now if this is the start.`;
           <div style={{ position: "absolute", bottom: "6%", left: 0, right: 0, textAlign: "center" }}>
             <div style={{ color: "#fff", opacity: 0.85, fontSize: 12, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 2, marginBottom: 12 }}>WHO'S ARRIVING?</div>
             <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
-              <button onClick={() => { setMyName("Brad"); setMyRole("brad"); localStorage.setItem("victor_name","Brad"); unlockAudio(); setArrivalStage("lobby"); }}
+              <button onClick={() => { setMyName("Brad"); setMyRole("brad"); localStorage.setItem("victor_name","Brad"); unlockAudio(); narrateScene("Brad arrives at Aurora Horizon Digital."); setArrivalStage("lobby"); }}
                 style={{ background: `${T.green}22`, border: `1.5px solid ${T.green}`, color: T.green, borderRadius: 10, padding: "12px 26px", fontSize: 14, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, cursor: "pointer" }}>BRAD</button>
-              <button onClick={() => { setMyName("Jonathan"); setMyRole("jonathan"); localStorage.setItem("victor_name","Jonathan"); unlockAudio(); setArrivalStage("lobby"); }}
+              <button onClick={() => { setMyName("Jonathan"); setMyRole("jonathan"); localStorage.setItem("victor_name","Jonathan"); unlockAudio(); narrateScene("Jonathan arrives at Aurora Horizon Digital."); setArrivalStage("lobby"); }}
                 style={{ background: `${T.amber}22`, border: `1.5px solid ${T.amber}`, color: T.amber, borderRadius: 10, padding: "12px 26px", fontSize: 14, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, cursor: "pointer" }}>JONATHAN</button>
             </div>
           </div>
@@ -2429,7 +2538,7 @@ Greet ${arriving} now if this is the start.`;
                 // beep on swipe
                 try { const AC = window.AudioContext||window.webkitAudioContext; if(AC){ const c=new AC(); const o=c.createOscillator(); const g=c.createGain(); o.type="square"; o.frequency.value=880; g.gain.setValueAtTime(0.05,c.currentTime); g.gain.exponentialRampToValueAtTime(0.0001,c.currentTime+0.18); o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime+0.2);} } catch(e){}
                 // after doors open, start the ride
-                setTimeout(() => { startElevatorMusic(); unlockVoice(); setArrivalStage("elevator"); }, 1300);
+                narrateScene("You step into the elevator."); setTimeout(() => { startElevatorMusic(); unlockVoice(); setArrivalStage("elevator"); }, 1300);
               }}
               style={{ position: "absolute", bottom: "16%", left: "50%", transform: "translateX(-50%)", width: 150, height: 94, borderRadius: 10, border: "none", cursor: "pointer", padding: 0, animation: "cardBob 1.8s ease-in-out infinite",
                 background: `linear-gradient(135deg, ${myRole === "jonathan" ? "#caa14a" : "#3a8a5e"}, #1a2230)`, boxShadow: "0 8px 22px rgba(0,0,0,0.5)", overflow: "hidden", textAlign: "left" }}>
@@ -2585,7 +2694,7 @@ Greet ${arriving} now if this is the start.`;
           </div>
 
           {/* go in */}
-          <button onClick={() => { setArrivalStage("done"); setView("boardroom"); setNeedsSeat(true); }}
+          <button onClick={() => { narrateScene("You enter the boardroom. The team is waiting."); setArrivalStage("done"); setView("boardroom"); setNeedsSeat(true); }}
             style={{ marginTop: 20, background: `${T.cyan}1E`, border: `1px solid ${T.cyan}`, color: T.cyan, borderRadius: 10, padding: "12px 28px", fontSize: 13, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1.5, cursor: "pointer", position: "relative", zIndex: 1 }}>
             GO IN TO THE BOARDROOM ▸
           </button>
@@ -2683,6 +2792,7 @@ Greet ${arriving} now if this is the start.`;
         <button style={btn(panel === "reports", meetingArchive.length ? T.violet : T.muted)} onClick={() => setPanel(panel === "reports" ? null : "reports")}>REPORTS{meetingArchive.length ? ` (${meetingArchive.length})` : ""}</button>
         <button style={btn(voiceOn, T.green)} onClick={() => { setVoiceOn(v => !v); if (voiceOn && window.speechSynthesis) window.speechSynthesis.cancel(); }}>VOICE {voiceOn ? "ON" : "OFF"}</button>
         <button style={btn(realVoice, T.cyan)} onClick={() => { setRealVoice(v => !v); if (realVoice && audioElRef.current) { audioElRef.current.pause(); } }} title="Natural ElevenLabs voices">REAL VOICE {realVoice ? "ON" : "OFF"}</button>
+        <button style={btn(announceNames, T.violet)} onClick={() => setAnnounceNames(v => !v)} title="Narrator announces each speaker by name">📢 NAMES {announceNames ? "ON" : "OFF"}</button>
         <button style={btn(roomSound, T.cyanDim)} onClick={() => setRoomSound(s => !s)} title="Ambient room & city sound (all views)">♪ AMBIENCE {roomSound ? "ON" : "OFF"}</button>
         <button style={btn(liveMode, T.green)} onClick={() => { setLiveMode(v => !v); if (!liveMode && !realVoice) setRealVoice(true); }} title="Hands-free voice conversation — just talk">🎙 LIVE {liveMode ? "ON" : "OFF"}</button>
         {creditsUsed > 0 && <span style={{ fontSize: 10, color: T.muted, fontFamily: "'JetBrains Mono',monospace", alignSelf: "center", padding: "0 4px" }} title="Estimated ElevenLabs credits used this session">~{creditsUsed} credits</span>}
@@ -2754,10 +2864,18 @@ Greet ${arriving} now if this is the start.`;
                 <div style={{ fontSize: 13, lineHeight: 1.6 }}>Brief him on where Aurora Horizon stands, or hit a button below. He works off real numbers — feed him what you've got under <span style={{ color: T.cyan }}>DATA</span>, and he won't invent the rest.</div>
               </div>
             )}
-            {loading && (
+            {loading && !streamPreview && (
               <div style={{ display: "flex", alignItems: "center", gap: 8, color: T.cyan, fontSize: 13, margin: "16px 0", fontFamily: "'JetBrains Mono',monospace" }}>
                 <span style={{ width: 8, height: 8, borderRadius: "50%", background: T.cyan, animation: "pulse 1s infinite" }} />
                 Victor is thinking…
+              </div>
+            )}
+            {loading && streamPreview && (
+              <div style={{ margin: "12px 0", display: "flex", gap: 10, alignItems: "flex-start" }}>
+                <div style={{ width: 26, height: 26, flexShrink: 0 }}><Avatar who="victor" size={26} talking={true} /></div>
+                <div style={{ maxWidth: "80%", background: T.panel, border: `1px solid ${T.cyan}44`, borderRadius: "12px 12px 12px 4px", padding: "10px 14px", fontSize: 14, lineHeight: 1.5, color: T.text }}>
+                  {streamPreview}<span style={{ opacity: 0.6 }}>▋</span>
+                </div>
               </div>
             )}
             {[...messages].reverse().map((m, i) => (
