@@ -541,14 +541,20 @@ export default function Victor() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: text.slice(0, 500), voiceId }),
       });
-      if (!res.ok) return; // fail silently (quota, etc.)
+      if (!res.ok) {
+        let detail = "";
+        try { const j = await res.json(); detail = j.detail || j.error || ""; } catch {}
+        setError("Voice error (" + res.status + "): " + detail.slice(0, 200));
+        return;
+      }
       const blob = await res.blob();
+      if (!blob || blob.size < 200) { setError("Voice returned no audio."); return; }
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
       audioElRef.current = audio;
       audio.onended = () => URL.revokeObjectURL(url);
-      audio.play().catch(() => {});
-    } catch {}
+      audio.play().catch((e) => { setError("Audio blocked by browser — click the page once, then try again."); });
+    } catch (e) { setError("Voice fetch failed: " + String(e.message || e)); }
   }, [realVoice]);
 
   async function callVictor(userText, opts = {}) {
