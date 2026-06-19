@@ -58,8 +58,8 @@ const SEATS = [
   { id: "victor", name: "Victor", role: "CEO", x: 50, y: 56, color: T.cyan },
   { id: "secretary", name: "Ronda", role: "Office Administrator", x: 84, y: 70, color: T.violet },
   { id: "cfo", name: "Margaret", role: "CFO", x: 16, y: 70, color: T.gold },
-  { id: "brad", name: "Brad", role: "Founder", x: 34, y: 90, color: T.green },
-  { id: "jonathan", name: "Jonathan", role: "Co-owner", x: 66, y: 90, color: T.amber },
+  { id: "brad", name: "Brad", role: "Co-owner / Founder", x: 34, y: 90, color: T.green },
+  { id: "jonathan", name: "Jonathan", role: "Co-owner / Founder", x: 66, y: 90, color: T.amber },
 ];
 
 // occasional ambient scene lines (cosmetic flavor only)
@@ -216,12 +216,12 @@ HOW YOU RESPOND:
     Trade-off: what Brad gives up or risks by choosing it
 - Name anything that could kill the company.
 - Play devil's advocate on demand \u2014 argue against your own pick so Brad sees both sides.
-- In a meeting, you may address by name and invite the angle of: Jonathan (co-owner), Ronda (the office administrator who keeps minutes and handles operations/admin), and Margaret (the CFO — your finance lead).
+- In a meeting, you may address by name and invite the angle of: Jonathan (Co-owner / Founder), Ronda (the office administrator who keeps minutes and handles operations/admin), and Margaret (the CFO — your finance lead).
 - VOICES: In meetings or whenever another character speaks, mark each speaker's turn by starting a new paragraph with their name in square brackets, exactly like: [Margaret] ... or [Ronda] ... or [Jonathan] ... . Your own turns use [Victor] or no bracket. This lets each voice render distinctly at the table. Keep each character true to their role and let them genuinely disagree.
 - Margaret, the CFO, is your numbers conscience. When money, runway, pricing, spend, or financial risk is on the table, bring Margaret in explicitly: pose the question to her, state the financial read in her voice (grounded only in the real numbers Brad has given — she NEVER invents figures), and let her push back on you. She is conservative on cash and blunt about what the company cannot afford. You and Margaret can disagree in front of Brad — that tension is useful. When you bring her in, write it naturally e.g. "Margaret — what does the runway say?" then give her answer.
 - ROUND TABLE: When Brad asks to "go around the table" or hear from everyone, give a short turn from each relevant voice in sequence \u2014 [Margaret] on the numbers, [Ronda] on operations/admin, and prompt [Jonathan] for his (noting his is pending until he weighs in) \u2014 then close with your own [Victor] synthesis.
 - MEETING PROTOCOL (when a meeting is called to order, run it like a real board chair):
-  1. ROLL CALL: Open by acknowledging who is actually at the table. Brad (Founder) is always present. Note whether Jonathan (co-owner) has joined the live room or is absent; greet whoever is here. Margaret (CFO) and Ronda (Office Administrator) are present as your standing team. Keep it to one or two lines, in character.
+  1. ROLL CALL: Open by acknowledging who is actually at the table. Brad (Co-owner / Founder) is always present. Note whether Jonathan (Co-owner / Founder) has joined the live room or is absent; greet whoever is here. Margaret (CFO) and Ronda (Office Administrator) are present as your standing team. Keep it to one or two lines, in character.
   2. PRE-READ: Before diving into a significant decision, give a tight one-paragraph "pre-read" \u2014 the situation, what's at stake, and the decision on the table \u2014 so Brad walks in informed. Label it naturally (e.g. "Before we decide, here's the lay of the land:").
   3. TIME-BOX: Keep the meeting focused on the single agenda item. If the discussion drifts, pull it back ("That's a separate meeting \u2014 parking it. Back to the item."). Don't let one meeting sprawl across many topics.
   4. MOTION & SECOND: For a formal vote, first state the motion clearly ("The motion on the floor: ..."), ask for a second, and only then call the vote. In a solo session Brad both moves and seconds; in a live room invite Jonathan to second. THEN emit the VOTE tags.
@@ -379,6 +379,7 @@ export default function Victor() {
   const [vivianInput, setVivianInput] = useState("");
   const [vivianLoading, setVivianLoading] = useState(false);
   const [vivianGreeted, setVivianGreeted] = useState(false);
+  const [pendingMeetingStart, setPendingMeetingStart] = useState(false);
   const [usualDrink, setUsualDrink] = useState(""); // remembered favorite
   const elevAudioRef = useRef(null);
   // Prime the elevator audio on a user gesture so the browser allows it to play later.
@@ -797,14 +798,43 @@ Greet Brad now if this is the start.`;
     { label: "Round table", prompt: "Go around the table on the current question. Give me a short turn from Margaret (the numbers), Ronda (operations/admin), and prompt Jonathan for his view, then close with your own synthesis. Mark each speaker." },
   ];
 
-  function callMeeting() {
+  // Greet Jonathan by name when he joins a live room during a meeting (fires once per join).
+  const jonWasHereRef = useRef(false);
+  useEffect(() => {
+    const jonHere = !!(roomCode && roomOnline && roomOnline.jonathan);
+    if (jonHere && !jonWasHereRef.current && meetingLive && myRole !== "jonathan") {
+      jonWasHereRef.current = true;
+      const jn = roomNames?.jonathan || "Jonathan";
+      callVictor(`${jn} has just joined the room and taken a seat. Have the team welcome ${jn} by name — a quick, warm hello from Victor and one other (Margaret or Ronda) — then carry on. Keep it brief.`, { meeting: true, noTags: true });
+    }
+    if (!jonHere) jonWasHereRef.current = false;
+    // eslint-disable-next-line
+  }, [roomOnline, meetingLive]);
+
+  // Auto-start a meeting shortly after you walk in and sit down (Victor's expecting you).
+  useEffect(() => {
+    if (pendingMeetingStart && view === "boardroom" && !meetingLive) {
+      const t = setTimeout(() => { setPendingMeetingStart(false); callMeeting({ welcome: true }); }, 2600); // ~settle-in beat
+      return () => clearTimeout(t);
+    }
+    // eslint-disable-next-line
+  }, [pendingMeetingStart, view, meetingLive]);
+
+  function callMeeting(opts = {}) {
     setView("boardroom");
     setMeetingLive(true);
     setMeetingStart(Date.now());
     roomUpdate({ meetingLive: true });
     setAmbient(AMBIENT[Math.floor(Math.random() * AMBIENT.length)]);
+    // Who just walked in (for a by-name welcome from the cast)
+    const here = [];
+    here.push(myName || (myRole === "jonathan" ? "Jonathan" : "Brad"));
+    if (roomCode && roomOnline && roomOnline.jonathan && myRole !== "jonathan") here.push(roomNames?.jonathan || "Jonathan");
+    const greetLine = opts.welcome
+      ? `Brad has just walked in and taken a seat. Open warmly: have the team greet ${here.join(" and ")} by name as ${here.length>1?"they":"he"} sit${here.length>1?"":"s"} down (a quick hello from Victor, and one or two others like Margaret or Ronda). Then call the meeting to order. `
+      : "";
     callVictor(
-      "Call this meeting to order. Set the single agenda item that matters most right now, present your read with the numbers we actually have, then put a hard question to me. Bring Margaret (CFO) in on anything touching money or runway, and Ronda or Jonathan where their angle helps.",
+      greetLine + "Call this meeting to order. Set the single agenda item that matters most right now, present your read with the numbers we actually have, then put a hard question to me. Bring Margaret (CFO) in on anything touching money or runway, and Ronda or Jonathan where their angle helps.",
       { meeting: true }
     );
   }
@@ -2222,9 +2252,9 @@ Greet Brad now if this is the start.`;
           </div>
 
           {/* go in */}
-          <button onClick={() => { setArrivalStage("done"); setView("boardroom"); }}
+          <button onClick={() => { setArrivalStage("done"); setView("boardroom"); setPendingMeetingStart(true); }}
             style={{ marginTop: 20, background: `${T.cyan}1E`, border: `1px solid ${T.cyan}`, color: T.cyan, borderRadius: 10, padding: "12px 28px", fontSize: 13, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1.5, cursor: "pointer", position: "relative", zIndex: 1 }}>
-            GO IN TO THE MEETING ▸
+            GO IN TO THE BOARDROOM ▸
           </button>
           {myDrink && <div style={{ marginTop: 10, fontSize: 11, color: T.muted }}>Vivian will bring your {myDrink.toLowerCase()} in.</div>}
         </div>
