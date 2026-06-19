@@ -382,28 +382,21 @@ export default function Victor() {
   const [usualDrink, setUsualDrink] = useState(""); // remembered favorite
   const elevAudioRef = useRef(null);
   // Prime the elevator audio on a user gesture so the browser allows it to play later.
-  // Unlock audio silently on early taps (building/lobby) WITHOUT starting the music yet.
-  function unlockAudio() {
-    try {
-      if (!elevAudioRef.current) elevAudioRef.current = new Audio("/elevator.mp3");
-      const a = elevAudioRef.current;
-      a.loop = true; a.volume = 1.0; a.muted = true;
-      // play+pause while muted unlocks permission without making sound
-      const p = a.play();
-      if (p && p.then) p.then(() => { a.pause(); a.currentTime = 0; a.muted = false; }).catch(() => { a.muted = false; });
-    } catch(e) {}
+  // Just unlock the voice channel (call inside a click gesture).
+  function unlockVoice() {
     try {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (AC) { if (!window.__victorAC) window.__victorAC = new AC(); if (window.__victorAC.state === "suspended") window.__victorAC.resume(); }
     } catch(e) {}
   }
-  // Start the elevator music (called when the ride begins).
+  function unlockAudio() { unlockVoice(); }
+  // Start the elevator music — called DIRECTLY from the elevator tap (a click gesture, so allowed).
   function startElevatorMusic() {
     try {
       if (!elevAudioRef.current) elevAudioRef.current = new Audio("/elevator.mp3");
       const a = elevAudioRef.current;
       a.loop = true; a.volume = 1.0; a.muted = false; a.currentTime = 0;
-      a.play().catch(()=>{});
+      a.play().then(() => console.log("ELEVATOR MUSIC: playing")).catch(err => console.warn("MUSIC blocked:", err && err.name));
     } catch(e) {}
   }
 
@@ -420,9 +413,10 @@ export default function Victor() {
       if (f >= total) { clearInterval(climb); setTimeout(() => setArrivalStage("reception"), 900); }
     }, step);
 
-    // start the music now that the ride is beginning (audio was unlocked by the earlier tap)
-    startElevatorMusic();
+    // music is started by the elevator tap; this effect only ensures it stops when the ride ends
     let stopMusic = () => { try { if (elevAudioRef.current) { elevAudioRef.current.pause(); elevAudioRef.current.currentTime = 0; } } catch(e){} };
+    // safety: if somehow not playing yet, try (covers SKIP-free direct loads)
+    try { if (elevAudioRef.current && elevAudioRef.current.paused) elevAudioRef.current.play().catch(()=>{}); } catch(e){}
 
     return () => { clearInterval(climb); stopMusic(); };
     // eslint-disable-next-line
@@ -2070,7 +2064,7 @@ Greet Brad now if this is the start.`;
       )}
 
       {arrivalStage === "lobby" && (
-        <div onClick={() => { unlockAudio(); setArrivalStage("elevator"); }} style={{ position: "fixed", inset: 0, zIndex: 200, cursor: "pointer", overflow: "hidden",
+        <div onClick={() => { startElevatorMusic(); unlockVoice(); setArrivalStage("elevator"); }} style={{ position: "fixed", inset: 0, zIndex: 200, cursor: "pointer", overflow: "hidden",
           background: "linear-gradient(180deg,#0e141c 0%,#141c26 60%,#0a0e13 100%)" }}>
           {/* lobby header */}
           <div style={{ position: "absolute", top: "8%", left: 0, right: 0, textAlign: "center" }}>
