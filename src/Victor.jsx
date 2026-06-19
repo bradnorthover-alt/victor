@@ -544,11 +544,12 @@ export default function Victor() {
       if (!res.ok) {
         let detail = "";
         try { const j = await res.json(); detail = j.detail || j.error || ""; } catch {}
-        setError("Voice error (" + res.status + "): " + detail.slice(0, 200));
+        console.error("VOICE ERROR", res.status, detail);
+        setError("Voice error (" + res.status + "): " + String(detail).slice(0, 250));
         return;
       }
       const blob = await res.blob();
-      if (!blob || blob.size < 200) { setError("Voice returned no audio."); return; }
+      if (!blob || blob.size < 200) { console.error("VOICE: tiny blob", blob && blob.size); setError("Voice returned no audio (blob " + (blob ? blob.size : 0) + " bytes)."); return; }
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
       audioElRef.current = audio;
@@ -1296,7 +1297,7 @@ export default function Victor() {
                 const c = SPEAKER_COLORS[spoken.who] || T.cyan;
                 const nm = spoken.who.charAt(0).toUpperCase() + spoken.who.slice(1);
                 return (
-                  <div style={{ position: "absolute", top: 14, left: 12, width: "38%", maxWidth: 230, background: "rgba(9,14,20,0.94)", border: `1px solid ${c}55`, borderRadius: 10, padding: 10, boxShadow: `0 0 24px rgba(0,0,0,0.5)`, zIndex: 5 }}>
+                  <div style={{ position: "absolute", top: 14, left: 12, width: "46%", maxWidth: 300, background: "rgba(9,14,20,0.96)", border: `1px solid ${c}77`, borderRadius: 10, padding: 12, boxShadow: `0 0 28px rgba(0,0,0,0.6)`, zIndex: 5 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
                       <Avatar who={spoken.who} size={44} talking={true} mood={spoken.mood} />
                       <div>
@@ -1304,7 +1305,7 @@ export default function Victor() {
                         <div style={{ fontSize: 9, color: T.muted, letterSpacing: 1 }}>{({ margaret: "CFO", ronda: "OFFICE ADMIN", victor: "CEO", priya: "GROWTH", desmond: "LEGAL", theo: "PRODUCT", guest: "GUEST" }[spoken.who] || "")} · SPEAKING</div>
                       </div>
                     </div>
-                    <div style={{ fontSize: 12.5, lineHeight: 1.5, color: T.text, maxHeight: 92, overflowY: "auto" }}>{spoken.said}<span style={{ color: c, animation: "pulse 1s infinite" }}>|</span></div>
+                    <div style={{ fontSize: 14, lineHeight: 1.55, color: T.text, maxHeight: 150, overflowY: "auto" }}>{spoken.said}<span style={{ color: c, animation: "pulse 1s infinite" }}>|</span></div>
                     {/* speaking queue: who's spoken / who's next */}
                     {speakingQueue.length > 1 && (
                       <div style={{ display: "flex", gap: 4, marginTop: 8, flexWrap: "wrap", alignItems: "center" }}>
