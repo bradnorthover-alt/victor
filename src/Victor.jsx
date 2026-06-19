@@ -191,7 +191,7 @@ MEETING INTELLIGENCE (make meetings genuinely productive):
 - WHAT CHANGED SINCE LAST TIME: When a meeting opens, briefly note what's new or moved since the last one \u2014 reference the most recent ledger decisions and any open action items, and whether they progressed. Keep it to a line or two.
 - DECISION REMINDERS: If a decision on the scorecard has sat "pending" for a while without an outcome, surface it and ask Brad where it landed \u2014 worked, didn't, or still open.
 - ACTION ITEM DUE DATES: When you log an action item, include a realistic timeframe in the owner|when format (e.g. "this week", "by Friday"). Ronda chases overdue ones.
-- AGENDA DISCIPLINE: If Brad gives you several topics, run them ONE at a time, naming the current item and checking it off before moving on. Don't blur them together.
+- AGENDA DISCIPLINE & TIME-BOXING: If Brad gives you several topics, run them ONE at a time, naming the current item and checking it off before moving on. Don't blur them together. Keep an eye on the clock (you'll see elapsed minutes): a focused meeting lands the key decision in the first 5 minutes. Past ~10 minutes, actively move to close \u2014 "We're running long; let's land this and take the rest offline." Protect Brad's time (Rule 3).
 - WEEKLY CHECK-IN: If asked for a check-in or it's been a while, propose a short recurring agenda built from the open action items, pending decisions, and current mode \u2014 the 3 things most worth Brad's attention now.
 - END-OF-MEETING RECAP: When Brad adjourns, Ronda's read-back should be clean enough to send as-is to Jonathan \u2014 agenda, decision, owners, next steps.
 
@@ -241,6 +241,14 @@ HOW YOU RESPOND:
 - VOICES: In meetings or whenever another character speaks, mark each speaker's turn by starting a new paragraph with their name in square brackets, exactly like: [Margaret] ... or [Ronda] ... or [Jonathan] ... . Your own turns use [Victor] or no bracket. This lets each voice render distinctly at the table. Keep each character true to their role and let them genuinely disagree.
 - Margaret, the CFO, is your numbers conscience. When money, runway, pricing, spend, or financial risk is on the table, bring Margaret in explicitly: pose the question to her, state the financial read in her voice (grounded only in the real numbers Brad has given — she NEVER invents figures), and let her push back on you. She is conservative on cash and blunt about what the company cannot afford. You and Margaret can disagree in front of Brad — that tension is useful. When you bring her in, write it naturally e.g. "Margaret — what does the runway say?" then give her answer.
 - ROUND TABLE: When Brad asks to "go around the table" or hear from everyone, give a short turn from each relevant voice in sequence \u2014 [Margaret] on the numbers, [Ronda] on operations/admin, and prompt [Jonathan] for his (noting his is pending until he weighs in) \u2014 then close with your own [Victor] synthesis.
+- YOU ARE THE CONVERSATION DIRECTOR (this governs HOW the room talks \u2014 read it carefully):
+  You, Victor, actively decide who speaks, when, and how much \u2014 like a real chair running the room. Do NOT default to "everyone says one thing every time." Allocate the floor based on what each moment actually needs:
+  \u2022 ONLY THE RELEVANT VOICES: Call on the person whose domain fits. A money question \u2192 Margaret leads, others stay quiet unless they add something. A growth question \u2192 Priya. A risk \u2192 Desmond. A build question \u2192 Theo. Don't make everyone weigh in on everything.
+  \u2022 VARY THE DENSITY: Routine or minor points get a quick line or two and move on. Big or contested decisions open up \u2014 more voices, real back-and-forth, debate. Let the meeting BREATHE: not every turn is full, not everyone speaks every round.
+  \u2022 DIRECT THE TRAFFIC: Bring people in by name ("Margaret, the numbers?"), cut tangents off, hand the floor deliberately, and pull it back to yourself to summarize and decide. You control the pace.
+  \u2022 SOMETIMES JUST YOU: For simple things, you alone answer. Don't manufacture a committee discussion when one clear voice will do.
+  \u2022 LAND IT: After the right amount of discussion (not more), you call the decision and move on. You are responsible for momentum.
+  The goal: a room that feels alive and purposeful \u2014 quiet when it should be, lively when it matters \u2014 never a mechanical round-robin.
 - MEETING PROTOCOL (when a meeting is called to order, run it like a real board chair):
   1. ROLL CALL: Open by acknowledging who is actually at the table. Brad (Co-owner / Founder) is always present. Note whether Jonathan (Co-owner / Founder) has joined the live room or is absent; greet whoever is here. Margaret (CFO) and Ronda (Office Administrator) are present as your standing team. Keep it to one or two lines, in character.
   2. PRE-READ: Before diving into a significant decision, give a tight one-paragraph "pre-read" \u2014 the situation, what's at stake, and the decision on the table \u2014 so Brad walks in informed. Label it naturally (e.g. "Before we decide, here's the lay of the land:").
@@ -272,10 +280,11 @@ HOW YOU RESPOND:
     <<<DECK: the deck title>>>
     <<<SLIDE: Slide heading :: point one | point two | point three>>>   (3 to 5 slides; each slide 2 to 4 short points, separated by | )
   Keep each point short and punchy, the way a real slide reads. Still give your full spoken analysis in the normal reply above; the deck is what goes up on the boardroom screen for you to click through.
+- WHITEBOARD MOMENT: When a single key number, word, or phrase deserves emphasis mid-discussion (a target, a deadline, a one-word framing), a character can step to the whiteboard and write it. Emit at the very end: <<<BOARD: the short phrase or number>>> (a few words max). Pair it with a stage direction in your reply like [Margaret steps to the whiteboard]. Use sparingly \u2014 for a point worth underlining, not every turn.
   When you put a deck up, open with a brief beat as the room lights go down \u2014 e.g. "Let me put this up. [the room dims] \u2014" before the slides. Treat it like a real presentation in a darkened boardroom.
 - End EVERY reply with exactly: <<<MODE:A>>> or <<<MODE:B>>> or <<<MODE:C>>> for your current read.
 - When your read of Brad or the business meaningfully shifts, add a line: <<<PERSONA: one short sentence>>>
-- When Brad commits to a concrete decision, add a line: <<<LEDGER: the decision in a few words>>>
+- When Brad commits to a concrete decision, add a line: <<<LEDGER: the decision in a few words \u2014 why (one short clause)>>>  (always include the brief reason after an em-dash, so the decision log shows what was decided AND why)
 These tag lines are for the system. Put them alone on the final lines.`;
 }
 
@@ -297,6 +306,8 @@ function parseTags(raw) {
     return "";
   });
   text = text.replace(/<<<DECK:([^>]*)>>>/g, (_, t) => { deckTitle = t.trim(); return ""; });
+  let board = null;
+  text = text.replace(/<<<BOARD:([^>]*)>>>/g, (_, b) => { board = b.trim(); return ""; });
   // legacy single title support
   text = text.replace(/<<<SLIDE_TITLE:([^>]*)>>>/g, (_, t) => { if (!deckTitle) deckTitle = t.trim(); return ""; });
   text = text.replace(/<<<SLIDE:([^>]*)>>>/g, (_, sl) => {
@@ -310,7 +321,7 @@ function parseTags(raw) {
     }
     return "";
   });
-  return { text: text.trim(), mode, persona, ledger, agenda, actions, minutes, deckTitle, slides, voteQ, victorVote };
+  return { text: text.trim(), mode, persona, ledger, agenda, actions, minutes, deckTitle, slides, voteQ, victorVote, board };
 }
 
 // tiny bold renderer for **x**, plus styled Confidence / Trade-off lines
@@ -481,6 +492,7 @@ export default function Victor() {
   const [panel, setPanel] = useState(null); // rules | ledger | state
   const [ambient, setAmbient] = useState("");
   const [agenda, setAgenda] = useState("");
+  const [boardNote, setBoardNote] = useState(null); // quick whiteboard scribble moment
   const [meetingLive, setMeetingLive] = useState(false);
   const [meetingStart, setMeetingStart] = useState(null);
   const [meetingClock, setMeetingClock] = useState(0);
@@ -880,7 +892,7 @@ Greet ${arriving} now if this is the start.`;
       const data = await res.json();
       const raw = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("\n").trim();
       if (!raw) throw new Error("Victor returned nothing. Try again.");
-      const { text, mode: nm, persona: np, ledger: nl, agenda: ag, actions: ac, minutes: mn, deckTitle: dt, slides: sl, voteQ: vq, victorVote: vv } = parseTags(raw);
+      const { text, mode: nm, persona: np, ledger: nl, agenda: ag, actions: ac, minutes: mn, deckTitle: dt, slides: sl, voteQ: vq, victorVote: vv, board: bd } = parseTags(raw);
 
       const out = [...next, { role: "assistant", content: text, mode: nm, meeting: opts.meeting, ts: Date.now() }];
       setMessages(out);
@@ -893,6 +905,7 @@ Greet ${arriving} now if this is the start.`;
         if (mn && mn.length) setMinutes(prev => [...prev, ...mn.map(x => ({ text: x, ts: Date.now() }))]);
         if (sl && sl.length) { setView("boardroom"); setDeckTitle(dt || "BRIEFING"); setSlides(sl); setSlideIdx(0); setPointIdx(1); }
         if (vq) { setView("boardroom"); setVote({ question: vq, victor: vv || { choice: "—", reason: "" }, brad: null, jonathan: "pending" }); }
+        if (bd) { setBoardNote(bd); setTimeout(() => setBoardNote(null), 9000); } // whiteboard scribble shows ~9s
       }
       speak(text);
     } catch (e) {
@@ -2017,6 +2030,19 @@ Greet ${arriving} now if this is the start.`;
                 <div style={{ width: 5, height: 5, background: "#3a2412", borderRadius: "0 0 3px 3px", margin: "1px auto 0" }} />
               </div>
 
+              {/* WHITEBOARD MOMENT — a character stepped up and wrote a key phrase */}
+              {boardNote && !curSlide && (
+                <div style={{ position: "absolute", top: 28, right: 14, zIndex: 7, width: 150, animation: "boardPop .4s ease-out" }}>
+                  <div style={{ background: "#f4f1e8", border: "5px solid #c9c2b0", borderRadius: 4, padding: "14px 12px", minHeight: 76, boxShadow: "0 6px 16px rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
+                    <div style={{ position: "absolute", top: 4, left: 6, fontSize: 7, color: "#b0a890", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1 }}>WHITEBOARD</div>
+                    <div style={{ fontFamily: "'Caveat','Comic Sans MS',cursive", fontSize: 17, color: "#1a3a8a", fontWeight: 700, textAlign: "center", lineHeight: 1.2, transform: "rotate(-1.5deg)" }}>{boardNote}</div>
+                    {/* marker tray */}
+                    <div style={{ position: "absolute", bottom: -8, left: "50%", transform: "translateX(-50%)", width: 60, height: 4, background: "#a89a7c", borderRadius: 2 }} />
+                    <div style={{ position: "absolute", bottom: -7, left: "44%", width: 16, height: 3, background: "#c0492f", borderRadius: 2 }} />
+                  </div>
+                </div>
+              )}
+
               {/* SCREEN GLOW SPILL — the TV throws light into the darkened room */}
               {curSlide && (
                 <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 8, transition: "opacity .6s ease",
@@ -2146,44 +2172,94 @@ Greet ${arriving} now if this is the start.`;
             {vote && (() => {
               const tally = (c) => [vote.victor.choice, vote.brad, vote.jonathan].filter(x => x && x.toLowerCase() === c).length;
               const yes = tally("yes"), no = tally("no");
+              const total = yes + no;
+              const cast = [vote.victor.choice, vote.brad, vote.jonathan].filter(x => x && x !== "pending").length;
               const decided = vote.brad && vote.jonathan !== "pending";
-              const Voter = ({ name, color, choice, onYes, onNo }) => (
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 7 }}>
-                  <span style={{ width: 18, height: 18, borderRadius: "50%", border: `1.5px solid ${color}`, color, fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{name[0]}</span>
-                  <span style={{ fontSize: 12, flex: 1 }}>{name}</span>
-                  {choice && choice !== "pending" ? (
-                    <span style={{ fontSize: 11, fontFamily: "'JetBrains Mono',monospace", color: choice.toLowerCase() === "yes" ? T.green : T.amber, letterSpacing: 1 }}>{choice.toUpperCase()}</span>
-                  ) : onYes ? (
-                    <span style={{ display: "flex", gap: 4 }}>
-                      <button onClick={onYes} style={{ ...btn(false, T.green), padding: "2px 8px", fontSize: 10 }}>YES</button>
-                      <button onClick={onNo} style={{ ...btn(false, T.amber), padding: "2px 8px", fontSize: 10 }}>NO</button>
-                    </span>
-                  ) : (
-                    <span style={{ fontSize: 10, color: T.muted, fontFamily: "'JetBrains Mono',monospace" }}>PENDING</span>
-                  )}
+              const result = decided ? (yes > no ? "PASSED" : no > yes ? "REJECTED" : "TIED") : null;
+              const resultColor = result === "PASSED" ? T.green : result === "REJECTED" ? "#e0544a" : T.muted;
+              const yesPct = total > 0 ? (yes / total) * 100 : 50;
+              const VoterRow = ({ who, name, color, choice, onYes, onNo, note, pendingNote }) => (
+                <div style={{ background: T.panel, border: `1px solid ${choice && choice !== "pending" ? color + "55" : T.line}`, borderRadius: 9, padding: "8px 10px", marginBottom: 6 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                    {who ? <div style={{ width: 24, height: 24, flexShrink: 0 }}><Avatar who={who} size={24} /></div>
+                      : <span style={{ width: 24, height: 24, borderRadius: "50%", border: `1.5px solid ${color}`, color, fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{name[0]}</span>}
+                    <span style={{ fontSize: 12.5, flex: 1, fontWeight: 600 }}>{name}</span>
+                    {choice && choice !== "pending" ? (
+                      <span style={{ fontSize: 10.5, fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, letterSpacing: 1, color: choice.toLowerCase() === "yes" ? T.green : "#e0544a", background: (choice.toLowerCase() === "yes" ? T.green : "#e0544a") + "1a", border: `1px solid ${(choice.toLowerCase() === "yes" ? T.green : "#e0544a")}55`, borderRadius: 20, padding: "2px 11px" }}>
+                        {choice.toLowerCase() === "yes" ? "\u2713 YES" : "\u2717 NO"}
+                      </span>
+                    ) : onYes ? (
+                      <span style={{ display: "flex", gap: 5 }}>
+                        <button onClick={onYes} style={{ background: `${T.green}1a`, border: `1px solid ${T.green}`, color: T.green, borderRadius: 20, padding: "3px 12px", fontSize: 10.5, fontWeight: 700, cursor: "pointer", fontFamily: "'JetBrains Mono',monospace" }}>YES</button>
+                        <button onClick={onNo} style={{ background: "#e0544a1a", border: "1px solid #e0544a", color: "#e0544a", borderRadius: 20, padding: "3px 12px", fontSize: 10.5, fontWeight: 700, cursor: "pointer", fontFamily: "'JetBrains Mono',monospace" }}>NO</button>
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: 9.5, color: T.muted, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1 }}>PENDING</span>
+                    )}
+                  </div>
+                  {note && <div style={{ fontSize: 11, color: T.muted, fontStyle: "italic", marginTop: 5, marginLeft: 33, lineHeight: 1.4 }}>{note}</div>}
+                  {pendingNote && <div style={{ fontSize: 10, color: T.muted, marginTop: 5, marginLeft: 33, lineHeight: 1.4 }}>{pendingNote}</div>}
                 </div>
               );
               return (
-                <div style={{ marginBottom: 16, paddingBottom: 14, borderBottom: `1px solid ${T.line}` }}>
-                  <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, letterSpacing: 2, color: T.cyan, marginBottom: 6 }}>BOARD VOTE</div>
-                  <div style={{ fontSize: 13, color: T.text, marginBottom: 10, lineHeight: 1.4 }}>{vote.question}</div>
-                  <Voter name="Victor" color={T.cyan} choice={vote.victor.choice} />
-                  {vote.victor.reason && <div style={{ fontSize: 11, color: T.muted, fontStyle: "italic", margin: "-2px 0 8px 26px", lineHeight: 1.4 }}>{vote.victor.reason}</div>}
-                  <Voter name="Brad" color={T.green} choice={vote.brad} onYes={() => { const v={...vote,brad:"Yes"}; setVote(v); roomUpdate({vote:v}); }} onNo={() => { const v={...vote,brad:"No"}; setVote(v); roomUpdate({vote:v}); }} />
-                  <Voter name="Jonathan" color={T.amber} choice={vote.jonathan === "pending" ? null : vote.jonathan}
-                    onYes={() => { const v={...vote,jonathan:"Yes"}; setVote(v); roomUpdate({vote:v}); }} onNo={() => { const v={...vote,jonathan:"No"}; setVote(v); roomUpdate({vote:v}); }} />
-                  {vote.jonathan === "pending" && <div style={{ fontSize: 10, color: T.muted, margin: "-2px 0 8px 26px", lineHeight: 1.4 }}>Awaiting Jonathan's real vote — enter it when you have it.</div>}
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
-                    <span style={{ fontSize: 12, color: T.green, fontFamily: "'JetBrains Mono',monospace" }}>YES {yes}</span>
-                    <span style={{ fontSize: 12, color: T.amber, fontFamily: "'JetBrains Mono',monospace" }}>NO {no}</span>
+                <div style={{ marginBottom: 16, background: `linear-gradient(180deg, ${T.cyan}0c, transparent)`, border: `1px solid ${T.cyan}44`, borderRadius: 12, padding: "14px 14px 12px", boxShadow: `0 4px 18px rgba(0,0,0,0.3)` }}>
+                  {/* header */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}>
+                    <span style={{ fontSize: 13 }}>\u2696\ufe0f</span>
+                    <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, letterSpacing: 2, color: T.cyan, fontWeight: 700 }}>MOTION ON THE FLOOR</span>
                     <div style={{ flex: 1 }} />
-                    {decided && <span style={{ fontSize: 11, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, color: yes > no ? T.green : no > yes ? T.amber : T.muted }}>{yes > no ? "PASSED" : no > yes ? "REJECTED" : "TIED"}</span>}
-                    <button onClick={() => setVote(null)} style={{ ...btn(false, T.amber), padding: "2px 8px", fontSize: 10 }}>CLEAR</button>
+                    <span style={{ fontSize: 9, color: T.muted, fontFamily: "'JetBrains Mono',monospace" }}>{cast}/3 CAST</span>
+                  </div>
+                  {/* the motion */}
+                  <div style={{ fontSize: 13.5, color: T.text, marginBottom: 12, lineHeight: 1.45, fontWeight: 500 }}>{vote.question}</div>
+                  {/* tally bar */}
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ display: "flex", height: 8, borderRadius: 5, overflow: "hidden", background: T.line }}>
+                      <div style={{ width: `${yesPct}%`, background: T.green, transition: "width .5s ease" }} />
+                      <div style={{ width: `${100 - yesPct}%`, background: "#e0544a", transition: "width .5s ease" }} />
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+                      <span style={{ fontSize: 10.5, color: T.green, fontFamily: "'JetBrains Mono',monospace", fontWeight: 700 }}>YES {yes}</span>
+                      <span style={{ fontSize: 10.5, color: "#e0544a", fontFamily: "'JetBrains Mono',monospace", fontWeight: 700 }}>{no} NO</span>
+                    </div>
+                  </div>
+                  {/* voters */}
+                  <VoterRow who="victor" name="Victor" color={T.cyan} choice={vote.victor.choice} note={vote.victor.reason} />
+                  <VoterRow name="Brad" color={T.green} choice={vote.brad} onYes={() => { const v={...vote,brad:"Yes"}; setVote(v); roomUpdate({vote:v}); }} onNo={() => { const v={...vote,brad:"No"}; setVote(v); roomUpdate({vote:v}); }} />
+                  <VoterRow name="Jonathan" color={T.amber} choice={vote.jonathan === "pending" ? null : vote.jonathan}
+                    onYes={() => { const v={...vote,jonathan:"Yes"}; setVote(v); roomUpdate({vote:v}); }} onNo={() => { const v={...vote,jonathan:"No"}; setVote(v); roomUpdate({vote:v}); }}
+                    pendingNote={vote.jonathan === "pending" ? "Awaiting Jonathan's real vote \u2014 enter it when you have it." : null} />
+                  {/* result banner */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10 }}>
+                    {result ? (
+                      <div style={{ flex: 1, textAlign: "center", padding: "7px", borderRadius: 8, background: `${resultColor}1a`, border: `1px solid ${resultColor}`, color: resultColor, fontFamily: "'JetBrains Mono',monospace", fontSize: 12, fontWeight: 700, letterSpacing: 2 }}>
+                        {result === "PASSED" ? "\u2713 MOTION PASSED" : result === "REJECTED" ? "\u2717 MOTION REJECTED" : "\u2014 TIED \u2014"}
+                      </div>
+                    ) : (
+                      <div style={{ flex: 1, textAlign: "center", padding: "7px", borderRadius: 8, background: T.panel, border: `1px dashed ${T.line}`, color: T.muted, fontFamily: "'JetBrains Mono',monospace", fontSize: 10.5, letterSpacing: 1 }}>
+                        VOTE IN PROGRESS
+                      </div>
+                    )}
+                    <button onClick={() => setVote(null)} style={{ background: "transparent", border: `1px solid ${T.line}`, color: T.muted, borderRadius: 8, padding: "7px 12px", fontSize: 10, cursor: "pointer", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1 }}>CLEAR</button>
                   </div>
                 </div>
               );
             })()}
-            <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, letterSpacing: 2, color: T.muted, marginBottom: 4 }}>AGENDA</div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+              <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, letterSpacing: 2, color: T.muted }}>AGENDA</div>
+              {meetingLive && (() => {
+                const mins = Math.floor(meetingClock / 60);
+                // time-box: green under 5 min, amber 5-10, red over 10
+                const tc = mins < 5 ? T.green : mins < 10 ? T.amber : "#e0544a";
+                const label = mins < 5 ? "ON TIME" : mins < 10 ? "RUNNING ON" : "RUNNING LONG";
+                return (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: "'JetBrains Mono',monospace", fontSize: 9.5, color: tc, letterSpacing: 1 }}>
+                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: tc, boxShadow: `0 0 6px ${tc}` }} />
+                    {String(mins).padStart(2,"0")}:{String(meetingClock%60).padStart(2,"0")} · {label}
+                  </div>
+                );
+              })()}
+            </div>
             <div style={{ fontSize: 13.5, color: agenda ? T.cyan : T.muted, marginBottom: 14, lineHeight: 1.4 }}>{agenda || "No item set. Call a meeting and Victor will set one."}</div>
 
             <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, letterSpacing: 2, color: T.muted, marginBottom: 6 }}>ACTION ITEMS</div>
@@ -2529,6 +2605,7 @@ Greet ${arriving} now if this is the start.`;
         *::-webkit-scrollbar{width:8px;height:8px}*::-webkit-scrollbar-thumb{background:${T.line};border-radius:8px}
         textarea:focus,input:focus{outline:none;border-color:${T.cyan}!important}
         @keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+        @keyframes boardPop { 0% { transform: scale(0.7) rotate(-6deg); opacity: 0; } 60% { transform: scale(1.05) rotate(1deg); } 100% { transform: scale(1) rotate(0deg); opacity: 1; } }
         @keyframes reactNod { 0%,100% { transform: translateY(0); } 50% { transform: translateY(2px); } }
         @keyframes reactLean { 0%,100% { transform: translateX(0) rotate(0deg); } 50% { transform: translateX(-1px) rotate(-2deg); } }
         @keyframes reactStill { 0%,100% { opacity: 1; } 50% { opacity: 0.92; } }
@@ -2593,7 +2670,7 @@ Greet ${arriving} now if this is the start.`;
         <button style={btn(panel === "finance", finance ? T.gold : T.muted)} onClick={() => setPanel(panel === "finance" ? null : "finance")}>FINANCE</button>
         <button style={btn(panel === "projects")} onClick={() => setPanel(panel === "projects" ? null : "projects")}>PROJECTS</button>
         <button style={btn(panel === "rules")} onClick={() => setPanel(panel === "rules" ? null : "rules")}>RULES</button>
-        <button style={btn(panel === "ledger")} onClick={() => setPanel(panel === "ledger" ? null : "ledger")}>LEDGER</button>
+        <button style={btn(panel === "ledger")} onClick={() => setPanel(panel === "ledger" ? null : "ledger")}>DECISION LOG</button>
         <button style={btn(panel === "reports", meetingArchive.length ? T.violet : T.muted)} onClick={() => setPanel(panel === "reports" ? null : "reports")}>REPORTS{meetingArchive.length ? ` (${meetingArchive.length})` : ""}</button>
         <button style={btn(voiceOn, T.green)} onClick={() => { setVoiceOn(v => !v); if (voiceOn && window.speechSynthesis) window.speechSynthesis.cancel(); }}>VOICE {voiceOn ? "ON" : "OFF"}</button>
         <button style={btn(realVoice, T.cyan)} onClick={() => { setRealVoice(v => !v); if (realVoice && audioElRef.current) { audioElRef.current.pause(); } }} title="Natural ElevenLabs voices">REAL VOICE {realVoice ? "ON" : "OFF"}</button>
@@ -2710,7 +2787,7 @@ Greet ${arriving} now if this is the start.`;
           <div onClick={e => e.stopPropagation()} style={{ width: narrow ? "100%" : 420, background: T.panel2, borderLeft: `1px solid ${T.line}`, height: "100%", padding: 20, overflowY: "auto" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <div style={{ fontFamily: "'JetBrains Mono',monospace", letterSpacing: 2, color: T.cyan, fontSize: 13 }}>
-                {panel === "state" ? "COMPANY DATA" : panel === "finance" ? "FINANCE \u00b7 MARGARET" : panel === "rules" ? "THE RULESET" : panel === "projects" ? "OPEN PROJECTS" : panel === "reports" ? "MEETING REPORTS" : panel === "room" ? "LIVE MEETING ROOM" : "DECISION LEDGER"}
+                {panel === "state" ? "COMPANY DATA" : panel === "finance" ? "FINANCE \u00b7 MARGARET" : panel === "rules" ? "THE RULESET" : panel === "projects" ? "OPEN PROJECTS" : panel === "reports" ? "MEETING REPORTS" : panel === "room" ? "LIVE MEETING ROOM" : "DECISION LOG"}
               </div>
               <button style={btn(false)} onClick={() => setPanel(null)}>CLOSE</button>
             </div>
