@@ -734,7 +734,7 @@ export default function Victor() {
 
   // Real ElevenLabs voice for a given character turn.
   const VOICE_TUNE = {
-    victor:   { stability: 0.48, similarity_boost: 0.85, style: 0.32, speed: 1.05 }, // CEO: composed but brisk
+    victor:   { stability: 0.5,  similarity_boost: 0.9,  style: 0.35, speed: 1.05 }, // Adam: confident, smooth, commanding
     margaret: { stability: 0.48, similarity_boost: 0.85, style: 0.28, speed: 1.1  }, // precise, brisk
     ronda:    { stability: 0.48, similarity_boost: 0.85, style: 0.38, speed: 1.08 }, // warm, quicker
     priya:    { stability: 0.42, similarity_boost: 0.85, style: 0.48, speed: 1.12 }, // bright, energetic
@@ -745,7 +745,7 @@ export default function Victor() {
     narrator: { stability: 0.6,  similarity_boost: 0.85, style: 0.1,  speed: 0.95 }, // deep, smooth, unhurried
   };
   const VOICE_IDS = {
-    victor: "onwK4e9ZLuTAKqWW03F9",   // Daniel — authoritative male
+    victor: "pNInz6obpgDQGcFmaJgB",   // Adam — deep, confident, natural CEO voice
     margaret: "XB0fDUnXU5powFXDhCwa", // Charlotte — crisp female
     ronda: "pFZP5JQG7iQjIQuC4Bku",    // Lily — warm female
     priya: "Xb7hH8MSUJpSbSDYk0k2",    // Alice — bright, expressive female (premium)
@@ -840,17 +840,19 @@ export default function Victor() {
   // Speak a turn with stage directions narrated separately from the character's dialogue.
   const speakTurn = useCallback(async (who, rawText, force) => {
     if (!rawText) return;
-    // split into ordered segments: stage directions (*...* or [phrase]) vs dialogue
+    // Only [bracketed] stage directions go to the narrator. Asterisks *...* are the SAME speaker
+    // (emphasis / their own expression), so we just strip the asterisks and keep it in their voice.
+    const cleaned = rawText.replace(/\*/g, ""); // drop asterisks; that text stays the speaker's own
     const parts = [];
-    const re = /(\*[^*]+\*|\[[^\]]+\])/g;
+    const re = /(\[[^\]]+\])/g; // only square-bracket stage directions split out
     let last = 0, m;
-    while ((m = re.exec(rawText)) !== null) {
-      if (m.index > last) { const d = rawText.slice(last, m.index).trim(); if (d) parts.push({ kind: "dialogue", text: d }); }
-      const action = m[0].replace(/^[*\[]|[*\]]$/g, "").trim();
+    while ((m = re.exec(cleaned)) !== null) {
+      if (m.index > last) { const d = cleaned.slice(last, m.index).trim(); if (d) parts.push({ kind: "dialogue", text: d }); }
+      const action = m[0].replace(/^\[|\]$/g, "").trim();
       if (action) parts.push({ kind: "action", text: action });
       last = re.lastIndex;
     }
-    if (last < rawText.length) { const d = rawText.slice(last).trim(); if (d) parts.push({ kind: "dialogue", text: d }); }
+    if (last < cleaned.length) { const d = cleaned.slice(last).trim(); if (d) parts.push({ kind: "dialogue", text: d }); }
     if (parts.length === 0) return;
     // play segments in order, waiting for each to finish
     for (const p of parts) {
@@ -1548,10 +1550,11 @@ Greet ${arriving} now if this is the start.`;
   // Per-character voice tuning: stability (lower=more expressive), style (higher=more emphatic), speed feel.
 
   function stripStage(s) {
-    // remove *[...]* and standalone [phrase] stage directions and surrounding asterisks
+    // remove [bracketed] stage directions (true narration) and strip asterisk CHARACTERS
+    // but KEEP the asterisk text — it's the speaker's own words/emphasis.
     return (s || "")
-      .replace(/\*?\[[^\]]*\]\*?/g, " ")
-      .replace(/\*[^*]*\*/g, " ")
+      .replace(/\[[^\]]*\]/g, " ")   // drop [bracket] directions
+      .replace(/\*/g, "")             // drop asterisk marks, keep the words
       .replace(/\s+/g, " ")
       .trim();
   }
@@ -1561,9 +1564,13 @@ Greet ${arriving} now if this is the start.`;
     const turns = [];
     let cur = null;
     for (const ln of lines) {
-      const stageOnly = ln.match(/^\*?\[(.+\s.+)\]\*?$/);   // a whole line that's just a stage direction
       const sp = ln.match(/^\[([A-Za-z]+)\]\s*(.*)$/);
-      if (stageOnly && !sp) continue;
+      // ONLY a [bracket] line is true narration to fold in (never a speaker). Asterisks are the speaker's own words.
+      const isBracketStage = /^\[[^\]]+\]$/.test(ln) && !sp;
+      if (isBracketStage) {
+        if (cur) { cur.raw += (cur.raw ? " " : "") + ln; }
+        continue;
+      }
       if (sp) {
         if (cur) turns.push(cur);
         cur = { who: sp[1].toLowerCase(), said: stripStage(sp[2] || ""), raw: (sp[2] || "") };
@@ -1571,7 +1578,9 @@ Greet ${arriving} now if this is the start.`;
         cur.said += (cur.said ? " " : "") + stripStage(ln);
         cur.raw += (cur.raw ? " " : "") + ln;
       } else {
-        cur = { who: "victor", said: stripStage(ln), raw: ln };
+        // leading prose before any [Name] — treat as Victor, but only if it has real words after stripping
+        const said = stripStage(ln);
+        if (said) cur = { who: "victor", said, raw: ln };
       }
     }
     if (cur) turns.push(cur);
