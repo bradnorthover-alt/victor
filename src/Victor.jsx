@@ -685,15 +685,15 @@ export default function Victor() {
 
   // Real ElevenLabs voice for a given character turn.
   const VOICE_TUNE = {
-    victor:   { stability: 0.42, similarity_boost: 0.82, style: 0.32, speed: 1.07 }, // decisive, a touch of weight, still brisk
-    margaret: { stability: 0.48, similarity_boost: 0.8,  style: 0.18, speed: 1.14 }, // clipped, precise, fastest/sharpest
-    ronda:    { stability: 0.4,  similarity_boost: 0.85, style: 0.42, speed: 1.05 }, // warm, unhurried-friendly
-    priya:    { stability: 0.28, similarity_boost: 0.85, style: 0.58, speed: 1.15 }, // energetic, quickest
-    desmond:  { stability: 0.55, similarity_boost: 0.8,  style: 0.18, speed: 0.98 }, // careful, the most deliberate (but not draggy)
-    theo:     { stability: 0.34, similarity_boost: 0.85, style: 0.46, speed: 1.1  }, // casual, easy
-    guest:    { stability: 0.4,  similarity_boost: 0.8,  style: 0.35, speed: 1.08 },
-    vivian:   { stability: 0.4,  similarity_boost: 0.85, style: 0.52, speed: 1.05 }, // warm, welcoming
-    narrator: { stability: 0.62, similarity_boost: 0.75, style: 0.12, speed: 1.04 }, // even, understated
+    victor:   { stability: 0.45, similarity_boost: 0.82, style: 0.32, speed: 1.0 },  // decisive, natural ~145 wpm
+    margaret: { stability: 0.5,  similarity_boost: 0.8,  style: 0.18, speed: 1.02 }, // clipped, precise, a touch brisker
+    ronda:    { stability: 0.42, similarity_boost: 0.85, style: 0.42, speed: 0.96 }, // warm, easy ~135 wpm
+    priya:    { stability: 0.3,  similarity_boost: 0.85, style: 0.55, speed: 1.02 }, // energetic but not rushed
+    desmond:  { stability: 0.52, similarity_boost: 0.8,  style: 0.2,  speed: 0.94 }, // measured ~125-130 wpm
+    theo:     { stability: 0.36, similarity_boost: 0.85, style: 0.46, speed: 0.98 }, // casual, easy
+    guest:    { stability: 0.42, similarity_boost: 0.8,  style: 0.35, speed: 0.98 },
+    vivian:   { stability: 0.42, similarity_boost: 0.85, style: 0.5,  speed: 0.98 }, // warm, welcoming
+    narrator: { stability: 0.6,  similarity_boost: 0.75, style: 0.12, speed: 0.96 }, // even, unhurried
   };
   const VOICE_IDS = {
     victor: "onwK4e9ZLuTAKqWW03F9",   // Daniel — authoritative male
@@ -1438,49 +1438,57 @@ Greet ${arriving} now if this is the start.`;
     // eslint-disable-next-line
   }, [lastVictorMsg]);
 
-  // Advance through turns — driven by when the voice actually finishes (tight, smooth, no dead gaps).
+  // Advance through turns — driven by when the voice actually finishes. Smooth, no dead gaps, no mid-turn cut-offs.
   useEffect(() => {
     if (playIdx < 0 || playIdx >= turns.length) return;
     let cancelled = false;
-    // HARD STOP any audio still playing from a prior turn (prevents two voices overlapping)
-    try { if (audioElRef.current) { audioElRef.current.pause(); audioElRef.current.currentTime = 0; audioElRef.current = null; } } catch(e){}
-    const said = turns[playIdx].said;
-    // type the caption out at a snappy pace (independent of audio so words appear as spoken)
-    const dur = Math.max(1000, Math.min(5500, said.length * 30));
+    let advanced = false;
+    const turn = turns[playIdx];
+    const said = turn.said || "";
+
+    // type the caption out at a snappy pace (visual only; audio drives the real timing)
+    const typeDur = Math.max(800, Math.min(4500, said.length * 26));
     setCaption("");
     let i = 0;
-    const typeSpeed = Math.max(8, Math.min(22, dur / Math.max(said.length, 1)));
+    const typeSpeed = Math.max(6, Math.min(20, typeDur / Math.max(said.length, 1)));
     const typer = setInterval(() => { i++; setCaption(said.slice(0, i)); if (i >= said.length) clearInterval(typer); }, typeSpeed);
 
-    // speak the turn; when its audio fully finishes, move to the next turn after a tiny natural beat
-    let advanceTimer = null;
-    let advanced = false; // ensure we only advance ONCE per turn (prevents overlap/double-fire)
+    // move to the next turn after a short natural beat (only once)
+    let beat = null;
     const advance = () => {
       if (cancelled || advanced) return;
       advanced = true;
-      advanceTimer = setTimeout(() => {
+      beat = setTimeout(() => {
         if (cancelled) return;
-        if (playIdx + 1 < turns.length) setPlayIdx(playIdx + 1);
-        else setPlayIdx(-1);
-      }, 220); // small gap between speakers = natural turn-taking, not dead air
+        setPlayIdx(playIdx + 1 < turns.length ? playIdx + 1 : -1);
+      }, 130); // tight, natural turn-taking gap
     };
-    // PRE-LOAD: while this turn plays, fetch the next turn's audio so it starts with no gap.
+
+    // PRE-LOAD next turn's audio while this one plays (zero gap when voice is on)
     if (playIdx + 1 < turns.length) {
       const nxt = turns[playIdx + 1];
       const nxtText = stripStage(nxt.raw || nxt.said || "");
-      if (nxtText) { fetchVoiceClip(nxt.who, nxtText); } // fire-and-forget; caches the blob
+      if (nxtText) fetchVoiceClip(nxt.who, nxtText);
     }
-    // speakTurn resolves when all its segments finish playing
-    Promise.resolve(speakTurn(turns[playIdx].who, turns[playIdx].raw || said)).then(advance).catch(() => {
-      // if voice fails/off, fall back to the text duration so playback still progresses
-      if (!cancelled) advanceTimer = setTimeout(advance, dur);
-    });
-    // safety net: if audio never resolves (blocked), advance on the text duration + buffer
-    const safety = setTimeout(() => { if (!cancelled && playIdx < turns.length) advance(); }, dur + 8000);
 
-    return () => { cancelled = true; clearInterval(typer); if (advanceTimer) clearTimeout(advanceTimer); clearTimeout(safety); try { if (audioElRef.current) { audioElRef.current.pause(); } } catch(e){} };
+    // Speak the turn. speakTurn resolves only when ALL its audio finishes → then advance.
+    // If voice is OFF (realVoice false and not forced), speakTurn returns immediately; fall back to a read-time timer.
+    let fallbackTimer = null;
+    if (realVoice) {
+      Promise.resolve(speakTurn(turn.who, turn.raw || said)).then(advance).catch(advance);
+    } else {
+      // text-only mode: pace by reading time so it doesn't blast through instantly
+      fallbackTimer = setTimeout(advance, typeDur + 400);
+    }
+
+    return () => {
+      cancelled = true;
+      clearInterval(typer);
+      if (beat) clearTimeout(beat);
+      if (fallbackTimer) clearTimeout(fallbackTimer);
+    };
     // eslint-disable-next-line
-  }, [playIdx, turns]);
+  }, [playIdx]);
 
   const curTurn = playIdx >= 0 && playIdx < turns.length ? turns[playIdx] : null;
   // Active seat id: while loading it's Victor thinking; during playback it's the current turn's speaker.
