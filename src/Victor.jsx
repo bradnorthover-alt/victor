@@ -2145,15 +2145,41 @@ Greet Brad now if this is the start.`;
       )}
 
       {arrivalStage === "reception" && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "linear-gradient(180deg,#0a0e13,#070a0e)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 20, overflowY: "auto" }}>
-          {/* reception desk header */}
-          <div style={{ textAlign: "center", marginBottom: 8 }}>
+        <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "linear-gradient(180deg,#0c1220,#0a0e13,#070a0e)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 20, overflowY: "auto" }}>
+          {/* === LOBBY ENVIRONMENT (backdrop) === */}
+          <div style={{ position: "absolute", inset: 0, zIndex: 0, overflow: "hidden", pointerEvents: "none" }}>
+            {/* window wall with dusk city view */}
+            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "46%", background: "linear-gradient(180deg,#16243a,#243044)", display: "flex" }}>
+              {[...Array(8)].map((_,i) => <div key={i} style={{ flex: 1, borderRight: "2px solid rgba(10,16,24,0.7)", background: "linear-gradient(180deg,rgba(230,150,90,0.10),transparent 50%)" }} />)}
+              {/* distant lit buildings */}
+              <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "40%", display: "flex", alignItems: "flex-end", gap: 8, paddingLeft: 24, opacity: 0.5 }}>
+                {[50,75,60,85,55,70].map((h,i) => <div key={i} style={{ width: 26, height: `${h}%`, background: "#0e1622" }} />)}
+              </div>
+            </div>
+            {/* floor */}
+            <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "56%", background: "linear-gradient(180deg,#141c28,#0a0e13)", boxShadow: "inset 0 10px 40px rgba(0,0,0,0.6)" }} />
+            {/* reception desk */}
+            <div style={{ position: "absolute", bottom: "8%", left: "50%", transform: "translateX(-50%)", width: 360, maxWidth: "82%", height: 90, background: "linear-gradient(180deg,#2a3444,#1a2230)", backgroundImage: "linear-gradient(180deg,#2a3444,#1a2230)", borderRadius: "10px 10px 4px 4px", boxShadow: "0 12px 30px rgba(0,0,0,0.5)", border: `1px solid ${T.cyan}22` }}>
+              <div style={{ position: "absolute", top: 10, left: "50%", transform: "translateX(-50%)", display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontSize: 12 }}>🍁</span>
+                <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 8, letterSpacing: 2, color: T.cyan, opacity: 0.7 }}>AURORA HORIZON</span>
+              </div>
+            </div>
+            {/* plants flanking */}
+            <div style={{ position: "absolute", bottom: "10%", left: "14%", fontSize: 32 }}>🪴</div>
+            <div style={{ position: "absolute", bottom: "10%", right: "14%", fontSize: 32 }}>🪴</div>
+            {/* waiting chairs */}
+            <div style={{ position: "absolute", bottom: "9%", left: "24%", fontSize: 20, opacity: 0.7 }}>🛋️</div>
+          </div>
+
+          {/* reception header */}
+          <div style={{ textAlign: "center", marginBottom: 8, position: "relative", zIndex: 1 }}>
             <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, letterSpacing: 4, color: T.muted }}>RECEPTION · 30TH FLOOR</div>
             <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, letterSpacing: 2, color: T.cyan, marginTop: 4 }}>AURORA HORIZON DIGITAL</div>
           </div>
 
           {/* Vivian */}
-          <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "14px 0 6px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "14px 0 6px", position: "relative", zIndex: 1 }}>
             <div style={{ width: 64, height: 64 }}><Avatar who="vivian" size={64} talking={vivianLoading} /></div>
             <div>
               <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 14, letterSpacing: 1.5, color: T.violet, fontWeight: 600 }}>VIVIAN</div>
@@ -2162,7 +2188,7 @@ Greet Brad now if this is the start.`;
           </div>
 
           {/* conversation */}
-          <div style={{ width: "100%", maxWidth: 440, maxHeight: 220, overflowY: "auto", margin: "8px 0", display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ width: "100%", maxWidth: 440, maxHeight: 220, overflowY: "auto", margin: "8px 0", display: "flex", flexDirection: "column", gap: 8, position: "relative", zIndex: 1 }}>
             {vivianMsgs.map((m, i) => (
               <div key={i} style={{ alignSelf: m.role === "user" ? "flex-end" : "flex-start", maxWidth: "85%", background: m.role === "user" ? T.panel : `${T.violet}14`, border: `1px solid ${m.role === "user" ? T.lineSoft : T.violet + "44"}`, borderRadius: 10, padding: "8px 12px", fontSize: 13.5, lineHeight: 1.45, color: T.text }}>
                 {m.content}
@@ -2172,7 +2198,7 @@ Greet Brad now if this is the start.`;
           </div>
 
           {/* drink quick-picks */}
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", margin: "6px 0" }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", margin: "6px 0", position: "relative", zIndex: 1 }}>
             {["Coffee","Tea","Water","Sparkling water"].map(d => (
               <button key={d} onClick={() => callVivian("I'll have a " + d.toLowerCase() + ", thanks.", false)} disabled={vivianLoading}
                 style={{ background: myDrink.toLowerCase() === d.toLowerCase() ? `${T.cyan}22` : "transparent", border: `1px solid ${myDrink.toLowerCase() === d.toLowerCase() ? T.cyan : T.lineSoft}`, color: myDrink.toLowerCase() === d.toLowerCase() ? T.cyan : T.muted, borderRadius: 16, padding: "6px 14px", fontSize: 12, cursor: "pointer" }}>
@@ -2182,7 +2208,7 @@ Greet Brad now if this is the start.`;
           </div>
 
           {/* talk to vivian */}
-          <div style={{ width: "100%", maxWidth: 440, display: "flex", gap: 8, marginTop: 6 }}>
+          <div style={{ width: "100%", maxWidth: 440, display: "flex", gap: 8, marginTop: 6, position: "relative", zIndex: 1 }}>
             <input value={vivianInput} onChange={e => setVivianInput(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter" && vivianInput.trim() && !vivianLoading) callVivian(vivianInput.trim(), false); }}
               placeholder="Say hi to Vivian…" 
@@ -2193,7 +2219,7 @@ Greet Brad now if this is the start.`;
 
           {/* go in */}
           <button onClick={() => { setArrivalStage("done"); setView("boardroom"); }}
-            style={{ marginTop: 20, background: `${T.cyan}1E`, border: `1px solid ${T.cyan}`, color: T.cyan, borderRadius: 10, padding: "12px 28px", fontSize: 13, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1.5, cursor: "pointer" }}>
+            style={{ marginTop: 20, background: `${T.cyan}1E`, border: `1px solid ${T.cyan}`, color: T.cyan, borderRadius: 10, padding: "12px 28px", fontSize: 13, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1.5, cursor: "pointer", position: "relative", zIndex: 1 }}>
             GO IN TO THE MEETING ▸
           </button>
           {myDrink && <div style={{ marginTop: 10, fontSize: 11, color: T.muted }}>Vivian will bring your {myDrink.toLowerCase()} in.</div>}
