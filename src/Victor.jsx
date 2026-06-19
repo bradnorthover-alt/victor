@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { db } from './firebase'
 import { doc, onSnapshot, setDoc, updateDoc, getDoc } from 'firebase/firestore'
 
@@ -286,6 +286,10 @@ function parseTags(raw) {
 
 // tiny bold renderer for **x**, plus styled Confidence / Trade-off lines
 const SPEAKER_COLORS = { victor: "#4FD1E0", margaret: "#D8B45A", ronda: "#8B7FD6", jonathan: "#E8915B", brad: "#5FD08C", priya: "#3FC9A8", desmond: "#D86A8C", theo: "#6FA8E8", guest: "#C9A85F" };
+function fmtTime(ts) {
+  if (!ts) return "";
+  try { return new Date(ts).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }); } catch { return ""; }
+}
 function renderBody(text) {
   return text.split("\n").map((line, i) => {
     const trimmed = line.trim();
@@ -354,6 +358,8 @@ export default function Victor() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [voiceOn, setVoiceOn] = useState(false);
+  const [realVoice, setRealVoice] = useState(false); // ElevenLabs real voices
+  const audioElRef = useRef(null);
   const [view, setView] = useState("console"); // console | boardroom
   const [panel, setPanel] = useState(null); // rules | ledger | state
   const [ambient, setAmbient] = useState("");
@@ -525,11 +531,31 @@ export default function Victor() {
     } catch {}
   }, [voiceOn]);
 
+  // Real ElevenLabs voice for a given character turn.
+  const speakReal = useCallback(async (who, text) => {
+    if (!realVoice || !text || !text.trim()) return;
+    const voiceId = VOICE_IDS[who] || VOICE_IDS.victor;
+    try {
+      if (audioElRef.current) { audioElRef.current.pause(); audioElRef.current = null; }
+      const res = await fetch("/api/voice", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: text.slice(0, 500), voiceId }),
+      });
+      if (!res.ok) return; // fail silently (quota, etc.)
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audioElRef.current = audio;
+      audio.onended = () => URL.revokeObjectURL(url);
+      audio.play().catch(() => {});
+    } catch {}
+  }, [realVoice]);
+
   async function callVictor(userText, opts = {}) {
     // In a shared room, tell Victor who is speaking so he can address them by name.
     const speaker = roomCode ? (myName || (myRole === "jonathan" ? "Jonathan" : "Brad")) : null;
     const sentText = speaker && myRole === "jonathan" ? `[From Jonathan, co-owner] ${userText}` : userText;
-    const next = [...messages, { role: "user", content: sentText, from: speaker }];
+    const next = [...messages, { role: "user", content: sentText, from: speaker, ts: Date.now() }];
     setMessages(next);
     setInput("");
     setLoading(true);
@@ -551,7 +577,7 @@ export default function Victor() {
       if (!raw) throw new Error("Victor returned nothing. Try again.");
       const { text, mode: nm, persona: np, ledger: nl, agenda: ag, actions: ac, minutes: mn, deckTitle: dt, slides: sl, voteQ: vq, victorVote: vv } = parseTags(raw);
 
-      const out = [...next, { role: "assistant", content: text, mode: nm, meeting: opts.meeting }];
+      const out = [...next, { role: "assistant", content: text, mode: nm, meeting: opts.meeting, ts: Date.now() }];
       setMessages(out);
       store.set(K.msgs, JSON.stringify(out));
       if (np) { const merged = (persona ? persona + " " : "") + np; setPersona(merged); store.set(K.persona, merged); }
@@ -559,7 +585,7 @@ export default function Victor() {
       if (!opts.noTags) {
         if (ag) setAgenda(ag);
         if (ac && ac.length) setActions(prev => [...prev, ...ac]);
-        if (mn && mn.length) setMinutes(prev => [...prev, ...mn]);
+        if (mn && mn.length) setMinutes(prev => [...prev, ...mn.map(x => ({ text: x, ts: Date.now() }))]);
         if (sl && sl.length) { setView("boardroom"); setDeckTitle(dt || "BRIEFING"); setSlides(sl); setSlideIdx(0); setPointIdx(1); }
         if (vq) { setView("boardroom"); setVote({ question: vq, victor: vv || { choice: "—", reason: "" }, brad: null, jonathan: "pending" }); }
       }
@@ -618,7 +644,7 @@ export default function Victor() {
     }
     if (rec.minutes && rec.minutes.length) {
       lines.push("MINUTES (Ronda):");
-      rec.minutes.forEach(m => lines.push("  \u2022 " + m));
+      rec.minutes.forEach(m => { const mt = typeof m === "string" ? m : m.text; const mts = typeof m === "string" ? null : m.ts; lines.push("  \u2022 " + (mts ? "[" + fmtTime(mts) + "] " : "") + mt); });
       lines.push("");
     }
     const blob = new Blob([lines.join("\n")], { type: "text/plain" });
@@ -738,35 +764,90 @@ export default function Victor() {
     ? (MODES[[...messages].reverse().find(m => m.mode)?.mode] || MODES.A)
     : MODES[mode];
 
-  // Who's speaking: Victor by default. If his latest reply brings in Margaret (CFO) or Ronda, light their seat too.
+  // ===== SEQUENTIAL SPEAKER PLAYBACK =====
+  // Parse the latest assistant reply into ordered speaking turns and play them in time.
   const lastVictorMsg = [...messages].reverse().find(m => m.role === "assistant");
-  const lastText = lastVictorMsg ? lastVictorMsg.content.toLowerCase() : "";
-  const cfoActive = !loading && /\bmargaret\b/.test(lastText);
-  const rondaActive = !loading && /\bronda\b/.test(lastText);
-  const activeSpeaker = loading ? "victor" : (speaking ? "victor" : (cfoActive ? "cfo" : (rondaActive ? "secretary" : null)));
 
-  // Pull the most recent SPOKEN line + who said it, for the on-screen caption.
-  function latestSpoken() {
-    if (!lastVictorMsg) return null;
-    const lines = lastVictorMsg.content.split("\n").map(l => l.trim()).filter(Boolean);
-    let who = "victor", said = "";
-    for (const ln of lines) {
-      const sp = ln.match(/^\[([A-Za-z]+)\]\s*(.*)$/);
-      const stage = ln.match(/^\[(.+\s.+)\]$/);
-      if (stage) continue; // skip pure stage directions for the caption
-      if (sp) { who = sp[1].toLowerCase(); if (sp[2]) said = sp[2]; }
-      else { said = ln; }
-    }
-    const map = { margaret: "margaret", ronda: "ronda", victor: "victor", cfo: "margaret", secretary: "ronda" };
-    // light mood read from the words (cosmetic expression only)
-    const t = said.toLowerCase();
-    let mood = "neutral";
-    if (/\b(risk|careful|caution|worry|worried|concern|exposure|can't afford|burn|runway|danger|problem)\b/.test(t)) mood = "worried";
-    else if (/\b(great|win|strong|excellent|good news|promising|love this|opportunity|traction)\b/.test(t)) mood = "pleased";
-    else if (/\b(but|however|not sure|doubt|disagree|push back|really\?|skeptic|unconvinced)\b/.test(t)) mood = "skeptical";
-    return { who: map[who] || "victor", said, mood };
+  function moodOf(t) {
+    const s = (t || "").toLowerCase();
+    if (/\b(risk|careful|caution|worry|worried|concern|exposure|can't afford|burn|runway|danger|problem)\b/.test(s)) return "worried";
+    if (/\b(great|win|strong|excellent|good news|promising|love this|opportunity|traction)\b/.test(s)) return "pleased";
+    if (/\b(but|however|not sure|doubt|disagree|push back|really\?|skeptic|unconvinced)\b/.test(s)) return "skeptical";
+    return "neutral";
   }
-  const spoken = latestSpoken();
+  const NAME_TO_SEAT = { victor: "victor", margaret: "cfo", ronda: "secretary", priya: "marketing", desmond: "legal", theo: "product", guest: "guest" };
+  // ElevenLabs preset voice IDs per character (public voices, free-tier friendly)
+  const VOICE_IDS = {
+    victor: "pNInz6obpgDQGcFmaJgB",   // Adam — deep, composed
+    margaret: "XB0fDUnXU5powFXDhCwa", // Charlotte — crisp female
+    ronda: "EXAVITQu4vr4xnSDxMaL",    // Sarah — warm female
+    priya: "cgSgspJ2msm6clb6Rpf0",    // Jessica — energetic female
+    desmond: "JBFqnCBsd6RMkjVDRZzb",  // George — measured male
+    theo: "N2lVS1w4EtoT3dr4eOWO",     // Callum — casual male
+    guest: "onwK4e9ZLuTAKqWW03F9",    // Daniel — neutral male
+  };
+
+  function parseTurns(text) {
+    if (!text) return [];
+    const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+    const turns = [];
+    let cur = null;
+    for (const ln of lines) {
+      const stage = ln.match(/^\[(.+\s.+)\]$/);   // bracketed phrase = stage direction, skip for speaking
+      const sp = ln.match(/^\[([A-Za-z]+)\]\s*(.*)$/);
+      if (stage && !sp) continue;
+      if (sp) {
+        if (cur) turns.push(cur);
+        cur = { who: sp[1].toLowerCase(), said: sp[2] || "" };
+      } else if (cur) {
+        cur.said += (cur.said ? " " : "") + ln;
+      } else {
+        cur = { who: "victor", said: ln };
+      }
+    }
+    if (cur) turns.push(cur);
+    return turns.filter(t => t.said && t.said.trim());
+  }
+
+  const [playIdx, setPlayIdx] = useState(-1);   // which turn is currently "speaking" (-1 = none)
+  const [caption, setCaption] = useState("");    // typed-out caption text
+  const turns = useMemo(() => parseTurns(lastVictorMsg?.content || ""), [lastVictorMsg]);
+
+  // Start playback whenever a new assistant message arrives.
+  useEffect(() => {
+    if (!lastVictorMsg || turns.length === 0) { setPlayIdx(-1); return; }
+    setPlayIdx(0);
+    // eslint-disable-next-line
+  }, [lastVictorMsg]);
+
+  // Advance through turns, each lit for a duration scaled to its length.
+  useEffect(() => {
+    if (playIdx < 0 || playIdx >= turns.length) return;
+    const said = turns[playIdx].said;
+    // speak this turn in the character's real voice (if enabled)
+    speakReal(turns[playIdx].who, said);
+    // duration: ~45ms/char, clamped 1.6s–7s
+    const dur = Math.max(1600, Math.min(7000, said.length * 45));
+    // type the caption out
+    setCaption("");
+    let i = 0;
+    const typeSpeed = Math.max(12, Math.min(40, dur / Math.max(said.length, 1)));
+    const typer = setInterval(() => { i++; setCaption(said.slice(0, i)); if (i >= said.length) clearInterval(typer); }, typeSpeed);
+    const next = setTimeout(() => {
+      if (playIdx + 1 < turns.length) setPlayIdx(playIdx + 1);
+      else setPlayIdx(-1); // done — room goes calm
+    }, dur);
+    return () => { clearInterval(typer); clearTimeout(next); };
+    // eslint-disable-next-line
+  }, [playIdx, turns]);
+
+  const curTurn = playIdx >= 0 && playIdx < turns.length ? turns[playIdx] : null;
+  // Active seat id: while loading it's Victor thinking; during playback it's the current turn's speaker.
+  const activeSpeaker = loading ? "victor" : (curTurn ? (NAME_TO_SEAT[curTurn.who] || "victor") : null);
+  // The on-screen caption object (typed text + mood) — only while someone is actively speaking.
+  const spoken = curTurn ? { who: NAME_TO_SEAT[curTurn.who] ? curTurn.who : "victor", said: caption || curTurn.said, mood: moodOf(curTurn.said) } : null;
+  // speaking queue: who's spoken, who's next
+  const speakingQueue = turns.map((t, i) => ({ who: t.who, done: playIdx < 0 ? true : i < playIdx, current: i === playIdx }));
 
   // ----- styles -----
   const wrap = { background: T.bg, color: T.text, minHeight: "100vh", fontFamily: "'Space Grotesk','Inter',system-ui,sans-serif", display: "flex", flexDirection: "column" };
@@ -1206,10 +1287,19 @@ export default function Victor() {
                       <Avatar who={spoken.who} size={44} talking={true} mood={spoken.mood} />
                       <div>
                         <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, letterSpacing: 1.5, color: c, fontWeight: 600 }}>{nm.toUpperCase()}</div>
-                        <div style={{ fontSize: 9, color: T.muted, letterSpacing: 1 }}>{spoken.who === "margaret" ? "CFO" : spoken.who === "ronda" ? "OFFICE ADMIN" : "CEO"} · SPEAKING</div>
+                        <div style={{ fontSize: 9, color: T.muted, letterSpacing: 1 }}>{({ margaret: "CFO", ronda: "OFFICE ADMIN", victor: "CEO", priya: "GROWTH", desmond: "LEGAL", theo: "PRODUCT", guest: "GUEST" }[spoken.who] || "")} · SPEAKING</div>
                       </div>
                     </div>
-                    <div style={{ fontSize: 12.5, lineHeight: 1.5, color: T.text, maxHeight: 92, overflowY: "auto" }}>{spoken.said}</div>
+                    <div style={{ fontSize: 12.5, lineHeight: 1.5, color: T.text, maxHeight: 92, overflowY: "auto" }}>{spoken.said}<span style={{ color: c, animation: "pulse 1s infinite" }}>|</span></div>
+                    {/* speaking queue: who's spoken / who's next */}
+                    {speakingQueue.length > 1 && (
+                      <div style={{ display: "flex", gap: 4, marginTop: 8, flexWrap: "wrap", alignItems: "center" }}>
+                        {speakingQueue.map((q, i) => {
+                          const qc = SPEAKER_COLORS[q.who] || T.muted;
+                          return <span key={i} title={q.who} style={{ width: q.current ? 14 : 6, height: 6, borderRadius: 3, background: q.current ? qc : q.done ? `${qc}55` : `${T.muted}44`, transition: "all .3s ease" }} />;
+                        })}
+                      </div>
+                    )}
                   </div>
                 );
               })()}
@@ -1455,9 +1545,15 @@ export default function Victor() {
             {minutes.length === 0 && <div style={{ fontSize: 12, color: T.muted }}>Ronda hasn't logged anything yet.</div>}
             {minutes.length > 0 && (
               <div style={{ maxHeight: 160, overflowY: "auto" }}>
-                {minutes.map((m, i) => (
-                  <div key={i} style={{ fontSize: 12, color: T.text, opacity: 0.85, marginBottom: 6, paddingLeft: 10, borderLeft: `2px solid ${T.violet}55`, lineHeight: 1.4 }}>{m}</div>
-                ))}
+                {minutes.map((m, i) => {
+                  const mt = typeof m === "string" ? m : m.text;
+                  const mts = typeof m === "string" ? null : m.ts;
+                  return (
+                    <div key={i} style={{ fontSize: 12, color: T.text, opacity: 0.85, marginBottom: 6, paddingLeft: 10, borderLeft: `2px solid ${T.violet}55`, lineHeight: 1.4 }}>
+                      {mts && <span style={{ color: T.violet, fontFamily: "'JetBrains Mono',monospace", fontSize: 9, marginRight: 6 }}>{fmtTime(mts)}</span>}{mt}
+                    </div>
+                  );
+                })}
               </div>
             )}
 
@@ -1559,6 +1655,7 @@ export default function Victor() {
         <button style={btn(panel === "ledger")} onClick={() => setPanel(panel === "ledger" ? null : "ledger")}>LEDGER</button>
         <button style={btn(panel === "reports", meetingArchive.length ? T.violet : T.muted)} onClick={() => setPanel(panel === "reports" ? null : "reports")}>REPORTS{meetingArchive.length ? ` (${meetingArchive.length})` : ""}</button>
         <button style={btn(voiceOn, T.green)} onClick={() => { setVoiceOn(v => !v); if (voiceOn && window.speechSynthesis) window.speechSynthesis.cancel(); }}>VOICE {voiceOn ? "ON" : "OFF"}</button>
+        <button style={btn(realVoice, T.cyan)} onClick={() => { setRealVoice(v => !v); if (realVoice && audioElRef.current) { audioElRef.current.pause(); } }} title="Natural ElevenLabs voices">REAL VOICE {realVoice ? "ON" : "OFF"}</button>
         <button style={btn(panel === "room", roomCode ? T.green : T.muted)} onClick={() => setPanel(panel === "room" ? null : "room")}>
           {roomCode ? `ROOM ${roomCode}` : "JOIN / START"}
         </button>
@@ -1594,9 +1691,7 @@ export default function Victor() {
 
         {/* main */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
-          {view === "boardroom" && <Boardroom />}
-
-          {/* composer (TOP — type here) */}
+          {/* composer (TOP — type here, always above everything) */}
           <div style={{ padding: "14px 14px 8px", display: "flex", gap: 10, alignItems: "flex-end" }}>
             <textarea value={input} onChange={e => setInput(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (input.trim() && !loading) callVictor(input.trim()); } }}
@@ -1613,6 +1708,8 @@ export default function Victor() {
               <button key={q.label} style={btn(false)} disabled={loading} onClick={() => callVictor(q.prompt)}>{q.label}</button>
             ))}
           </div>
+
+          {view === "boardroom" && <Boardroom />}
 
           <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: narrow ? "12px" : "18px 24px", minHeight: 160 }}>
             {messages.length === 0 && !loading && (
@@ -1633,6 +1730,7 @@ export default function Victor() {
                   <div style={{ maxWidth: "76%", background: T.panel, border: `1px solid ${T.lineSoft}`, borderRadius: "12px 12px 4px 12px", padding: "10px 14px", fontSize: 14, lineHeight: 1.5 }}>
                     {m.from && <div style={{ fontSize: 9, color: m.from === "Jonathan" ? T.amber : T.green, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, marginBottom: 3 }}>{m.from}</div>}
                     {String(m.content).replace(/^\[From Jonathan, co-owner\]\s*/, "")}
+                    {m.ts && <div style={{ fontSize: 8.5, color: T.muted, fontFamily: "'JetBrains Mono',monospace", textAlign: "right", marginTop: 4 }}>{fmtTime(m.ts)}</div>}
                   </div>
                 </div>
               ) : (
@@ -1642,6 +1740,7 @@ export default function Victor() {
                     <span style={{ fontSize: 11, letterSpacing: 1.5, color: T.cyan, fontFamily: "'JetBrains Mono',monospace" }}>VICTOR</span>
                     {m.meeting && <span style={{ fontSize: 9, color: T.violet, border: `1px solid ${T.violet}55`, borderRadius: 4, padding: "1px 5px", letterSpacing: 1 }}>MEETING</span>}
                     {m.mode && <span style={{ fontSize: 9, color: MODES[m.mode].color, letterSpacing: 1 }}>· {MODES[m.mode].label}</span>}
+                    {m.ts && <span style={{ fontSize: 9, color: T.muted, fontFamily: "'JetBrains Mono',monospace", marginLeft: "auto" }}>{fmtTime(m.ts)}</span>}
                   </div>
                   <div style={{ background: T.panel, border: `1px solid ${T.line}`, borderLeft: `2px solid ${T.cyan}`, borderRadius: 10, padding: "14px 16px", fontSize: 14.5, lineHeight: 1.62, color: T.text }}>
                     {renderBody(m.content)}
@@ -1812,7 +1911,7 @@ export default function Victor() {
                       </>)}
                       {rec.minutes && rec.minutes.length > 0 && (<>
                         <div style={{ fontSize: 10, color: T.violet, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 2, marginBottom: 4 }}>RONDA'S MINUTES</div>
-                        {rec.minutes.map((m, j) => <div key={j} style={{ fontSize: 12, color: T.text, opacity: 0.82, marginBottom: 4, paddingLeft: 8, borderLeft: `2px solid ${T.violet}55`, lineHeight: 1.4 }}>{m}</div>)}
+                        {rec.minutes.map((m, j) => { const mt = typeof m === 'string' ? m : m.text; const mts = typeof m === 'string' ? null : m.ts; return <div key={j} style={{ fontSize: 12, color: T.text, opacity: 0.82, marginBottom: 4, paddingLeft: 8, borderLeft: `2px solid ${T.violet}55`, lineHeight: 1.4 }}>{mts ? <span style={{ color: T.violet, fontSize: 9, marginRight: 6 }}>{fmtTime(mts)}</span> : null}{mt}</div>; })}
                       </>)}
                       <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
                         <button style={{ ...btn(false, T.cyan), fontSize: 11 }} onClick={() => exportReport(rec)}>EXPORT</button>
