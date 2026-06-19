@@ -391,6 +391,7 @@ export default function Victor() {
   const [liveHeard, setLiveHeard] = useState(""); // what it's currently hearing
   const recogRef = useRef(null);
   const liveModeRef = useRef(false);
+  const charSpeakingRef = useRef(false); // true while a character voice is playing (mutes mic input)
   const [summoned, setSummoned] = useState([]); // advisor ids currently at the table
   const [guestRole, setGuestRole] = useState(""); // optional custom guest descriptor
   const [timeOfDay, setTimeOfDay] = useState("night"); // day | dusk | night
@@ -557,9 +558,11 @@ export default function Victor() {
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
       audioElRef.current = audio;
-      audio.onended = () => URL.revokeObjectURL(url);
-      audio.play().catch((e) => { setError("Audio blocked by browser — click the page once, then try again."); });
-    } catch (e) { setError("Voice fetch failed: " + String(e.message || e)); }
+      charSpeakingRef.current = true; // mute mic input while a character talks
+      audio.onended = () => { URL.revokeObjectURL(url); charSpeakingRef.current = false; };
+      audio.onpause = () => { charSpeakingRef.current = false; };
+      audio.play().catch((e) => { charSpeakingRef.current = false; setError("Audio blocked by browser — click the page once, then try again."); });
+    } catch (e) { charSpeakingRef.current = false; setError("Voice fetch failed: " + String(e.message || e)); }
   }, [realVoice]);
 
   async function callVictor(userText, opts = {}) {
@@ -852,6 +855,8 @@ export default function Victor() {
     let pauseTimer = null;
 
     rec.onresult = (e) => {
+      // While a character is speaking, ignore the mic entirely (prevents the voices feeding back).
+      if (charSpeakingRef.current) { return; }
       let interim = "";
       finalText = "";
       for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -860,8 +865,6 @@ export default function Victor() {
       }
       const heard = (finalText + " " + interim).trim();
       setLiveHeard(heard);
-      // BARGE-IN: if the user is speaking, stop any character audio.
-      if (heard && audioElRef.current) { try { audioElRef.current.pause(); } catch(e){} }
       // Debounced send: when speech settles for ~1.1s, send it.
       if (pauseTimer) clearTimeout(pauseTimer);
       pauseTimer = setTimeout(() => {
@@ -922,13 +925,13 @@ export default function Victor() {
   const NAME_TO_SEAT = { victor: "victor", margaret: "cfo", ronda: "secretary", priya: "marketing", desmond: "legal", theo: "product", guest: "guest" };
   // ElevenLabs preset voice IDs per character (public voices, free-tier friendly)
   const VOICE_IDS = {
-    victor: "onwK4e9ZLuTAKqWW03F9",   // Daniel — authoritative, natural male
-    margaret: "XB0fDUnXU5powFXDhCwa", // Charlotte — crisp, natural female
-    ronda: "pFZP5JQG7iQjIQuC4Bku",    // Lily — warm, natural female
-    priya: "cgSgspJ2msm6clb6Rpf0",    // Jessica — bright, expressive female
-    desmond: "JBFqnCBsd6RMkjVDRZzb",  // George — warm, measured male
-    theo: "iP95p4xoKVk53GoZ742N",     // Chris — casual, natural male
-    guest: "nPczCjzI2devNBz1zQrb",    // Brian — neutral, natural male
+    victor: "onwK4e9ZLuTAKqWW03F9",   // Daniel — authoritative male (working)
+    margaret: "XB0fDUnXU5powFXDhCwa", // Charlotte — crisp female (working)
+    ronda: "pFZP5JQG7iQjIQuC4Bku",    // Lily — warm female (working)
+    priya: "21m00Tcm4TlvDq8ikWAM",    // Rachel — clear female (default, reliable)
+    desmond: "pNInz6obpgDQGcFmaJgB",  // Adam — deep male (default, reliable)
+    theo: "TxGEqnHWrfWFTfGW9XjX",     // Josh — younger male (default, reliable)
+    guest: "VR6AewLTigWG4xSOukaG",    // Arnold — neutral male (default, reliable)
   };
 
   function stripStage(s) {
