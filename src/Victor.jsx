@@ -2367,7 +2367,7 @@ Greet ${arriving} now if this is the start.`;
           {/* title + prompt */}
           <div style={{ position: "absolute", top: "8%", left: 0, right: 0, textAlign: "center" }}>
             <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, letterSpacing: 5, color: "#fff", opacity: 0.9 }}>AURORA HORIZON DIGITAL</div>
-            <div style={{ fontSize: 10, color: "#fff", opacity: 0.5, letterSpacing: 2, marginTop: 4 }}>WOODSTOCK, NB</div>
+            <div style={{ fontSize: 10, color: "#fff", opacity: 0.5, letterSpacing: 2, marginTop: 4 }}>HALIFAX, NS</div>
           </div>
           <div style={{ position: "absolute", bottom: "6%", left: 0, right: 0, textAlign: "center" }}>
             <div style={{ color: "#fff", opacity: 0.85, fontSize: 12, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 2, marginBottom: 12 }}>WHO'S ARRIVING?</div>
