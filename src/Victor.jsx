@@ -1596,6 +1596,24 @@ export default function Victor() {
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
           {view === "boardroom" && <Boardroom />}
 
+          {/* composer (TOP — type here) */}
+          <div style={{ padding: "14px 14px 8px", display: "flex", gap: 10, alignItems: "flex-end" }}>
+            <textarea value={input} onChange={e => setInput(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (input.trim() && !loading) callVictor(input.trim()); } }}
+              placeholder="Brief Victor, or push back on him…" rows={1}
+              style={{ flex: 1, resize: "none", background: T.panel, color: T.text, border: `1px solid ${T.line}`, borderRadius: 10, padding: "12px 14px", fontSize: 14, fontFamily: "inherit", lineHeight: 1.4, minHeight: 22, maxHeight: 140 }} />
+            <button onClick={() => { if (input.trim() && !loading) callVictor(input.trim()); }} disabled={loading || !input.trim()}
+              style={{ background: input.trim() && !loading ? T.cyan : T.panel, color: input.trim() && !loading ? T.ink : T.muted,
+                border: "none", borderRadius: 10, padding: "12px 18px", fontWeight: 600, cursor: input.trim() && !loading ? "pointer" : "default", fontSize: 14, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1 }}>SEND</button>
+          </div>
+
+          {/* quick actions (TOP — under the composer) */}
+          <div style={{ display: "flex", gap: 8, padding: "0 14px 10px", flexWrap: "wrap", borderBottom: `1px solid ${T.lineSoft}` }}>
+            {QUICK.map(q => (
+              <button key={q.label} style={btn(false)} disabled={loading} onClick={() => callVictor(q.prompt)}>{q.label}</button>
+            ))}
+          </div>
+
           <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: narrow ? "12px" : "18px 24px", minHeight: 160 }}>
             {messages.length === 0 && !loading && (
               <div style={{ maxWidth: 560, margin: "30px auto", textAlign: "center", color: T.muted }}>
@@ -1634,23 +1652,6 @@ export default function Victor() {
             {error && <div style={{ color: T.amber, fontSize: 13, margin: "12px 0", border: `1px solid ${T.amber}55`, borderRadius: 8, padding: "10px 12px" }}>{error}</div>}
           </div>
 
-          {/* quick actions */}
-          <div style={{ display: "flex", gap: 8, padding: "8px 14px 0", flexWrap: "wrap" }}>
-            {QUICK.map(q => (
-              <button key={q.label} style={btn(false)} disabled={loading} onClick={() => callVictor(q.prompt)}>{q.label}</button>
-            ))}
-          </div>
-
-          {/* composer */}
-          <div style={{ padding: "10px 14px 16px", display: "flex", gap: 10, alignItems: "flex-end" }}>
-            <textarea value={input} onChange={e => setInput(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (input.trim() && !loading) callVictor(input.trim()); } }}
-              placeholder="Brief Victor, or push back on him…" rows={1}
-              style={{ flex: 1, resize: "none", background: T.panel, color: T.text, border: `1px solid ${T.line}`, borderRadius: 10, padding: "12px 14px", fontSize: 14, fontFamily: "inherit", lineHeight: 1.4, minHeight: 22, maxHeight: 140 }} />
-            <button onClick={() => { if (input.trim() && !loading) callVictor(input.trim()); }} disabled={loading || !input.trim()}
-              style={{ background: input.trim() && !loading ? T.cyan : T.panel, color: input.trim() && !loading ? T.ink : T.muted,
-                border: "none", borderRadius: 10, padding: "12px 18px", fontWeight: 600, cursor: input.trim() && !loading ? "pointer" : "default", fontSize: 14, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1 }}>SEND</button>
-          </div>
         </div>
       </div>
 
