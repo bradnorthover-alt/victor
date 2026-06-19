@@ -782,7 +782,7 @@ Greet Brad now if this is the start.`;
       raw = raw.replace(/<<<DRINK:[^>]*>>>/g, "").trim();
       const out = [...next, { role: "assistant", content: raw }];
       setVivianMsgs(out);
-      speakReal("vivian", raw, true);
+      speakTurn("vivian", raw, true);
     } catch (e) {
       setVivianMsgs(prev => [...prev, { role: "assistant", content: "Welcome to Aurora Horizon! Go right in — they're expecting you." }]);
     }
