@@ -823,6 +823,7 @@ Greet Brad now if this is the start.`;
   function callMeeting(opts = {}) {
     setView("boardroom");
     setMeetingLive(true);
+    setRealVoice(true); // ensure the cast speaks aloud in meetings
     setMeetingStart(Date.now());
     roomUpdate({ meetingLive: true });
     setAmbient(AMBIENT[Math.floor(Math.random() * AMBIENT.length)]);
