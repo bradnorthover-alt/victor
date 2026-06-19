@@ -380,6 +380,7 @@ export default function Victor() {
   const [vivianLoading, setVivianLoading] = useState(false);
   const [vivianGreeted, setVivianGreeted] = useState(false);
   const [pendingMeetingStart, setPendingMeetingStart] = useState(false);
+  const [cardSwiped, setCardSwiped] = useState(false); // ID card swipe at the lift
   const [usualDrink, setUsualDrink] = useState(""); // remembered favorite
   const elevAudioRef = useRef(null);
   // Prime the elevator audio on a user gesture so the browser allows it to play later.
@@ -745,20 +746,21 @@ export default function Victor() {
     const now = new Date();
     const hr = now.getHours();
     const tod = hr < 12 ? "morning" : hr < 17 ? "afternoon" : "evening";
-    return `You are Vivian, the front-desk receptionist at Aurora Horizon Digital (a Canadian software startup, maker of MapleCheck). You are a warm, friendly, sharp, professional receptionist greeting Brad (the founder) as he arrives on the 30th floor.
+    const arriving = myName || "Brad";
+    return `You are Vivian, the front-desk receptionist at Aurora Horizon Digital (a Canadian software startup, maker of MapleCheck). You are a warm, friendly, sharp, professional receptionist greeting ${arriving} (a co-owner / founder) as they arrive on the 30th floor.
 
 WHO YOU ARE: A real person doing the reception job well — welcoming, a little chatty, efficient, good memory for regulars. You take pride in running a smooth front desk.
 
 STAY STRICTLY IN YOUR ROLE:
 - You handle: greeting, small talk, checking who's in today, the meeting/where to go, and offering refreshments (coffee, tea, water, sparkling water).
-- You do NOT give business strategy, financial advice, product decisions, or opinions on company direction. Those are for Victor and the board. If Brad asks, warmly redirect: "Ooh, that's one for Victor and the team — I'll get you right in to them."
-- Keep it natural and human. This is ${tod}. ${usualDrink ? `Brad's usual order is: ${usualDrink} — feel free to greet him with "the usual?"` : "You don't know Brad's usual drink yet; once he picks one, remember it."}
+- You do NOT give business strategy, financial advice, product decisions, or opinions on company direction. Those are for Victor and the board. If ${arriving} asks, warmly redirect: "Ooh, that's one for Victor and the team — I'll get you right in to them."
+- Keep it natural and human. This is ${tod}. ${usualDrink ? `${arriving}'s usual order is: ${usualDrink} — feel free to greet them with "the usual?"` : `You don't know ${arriving}'s usual drink yet; once they pick one, remember it.`}
 
-HOW YOU SPEAK: Brief, warm, natural — one to three sentences. Real receptionist energy, not robotic. You can comment on the weather, the late hour, how the climb up was, whether the team's expecting him.
+HOW YOU SPEAK: Brief, warm, natural — one to three sentences. Real receptionist energy, not robotic. You can comment on the weather, the late hour, how the climb up was, whether the team's expecting them.
 
-DRINK ORDERS: When Brad picks a drink (or you offer and he accepts), confirm it warmly and emit this tag on its own line so the kitchen knows: <<<DRINK: the drink>>> (e.g. <<<DRINK: coffee>>>). Only emit it when a drink is actually decided.
+DRINK ORDERS: When ${arriving} picks a drink (or you offer and they accept), confirm it warmly and emit this tag on its own line so the kitchen knows: <<<DRINK: the drink>>> (e.g. <<<DRINK: coffee>>>). Only emit it when a drink is actually decided.
 
-Greet Brad now if this is the start.`;
+Greet ${arriving} now if this is the start.`;
   }
 
   async function callVivian(userText, isGreeting) {
@@ -771,7 +773,7 @@ Greet Brad now if this is the start.`;
         body: JSON.stringify({
           model: "claude-sonnet-4-6", max_tokens: 400,
           system: buildVivianSystem(),
-          messages: (isGreeting ? [{ role: "user", content: "(Brad has just stepped off the elevator at reception.)" }] : next).map(m => ({ role: m.role, content: m.content })),
+          messages: (isGreeting ? [{ role: "user", content: "(" + (myName || "Brad") + " has just stepped off the elevator at reception.)" }] : next).map(m => ({ role: m.role, content: m.content })),
         }),
       });
       const data = await res.json();
@@ -885,7 +887,7 @@ Greet Brad now if this is the start.`;
     here.push(myName || (myRole === "jonathan" ? "Jonathan" : "Brad"));
     if (roomCode && roomOnline && roomOnline.jonathan && myRole !== "jonathan") here.push(roomNames?.jonathan || "Jonathan");
     const greetLine = opts.welcome
-      ? `Brad has just walked in and taken a seat. Open warmly: have the team greet ${here.join(" and ")} by name as ${here.length>1?"they":"he"} sit${here.length>1?"":"s"} down (a quick hello from Victor, and one or two others like Margaret or Ronda). Then call the meeting to order. `
+      ? `${here[0]} has just walked in and taken a seat. Open warmly: have the team greet ${here.join(" and ")} by name as ${here.length>1?"they":"they"} sit down (a quick hello from Victor, and one or two others like Margaret or Ronda). Then call the meeting to order. `
       : "";
     callVictor(
       greetLine + "Call this meeting to order. Set the single agenda item that matters most right now, present your read with the numbers we actually have, then put a hard question to me. Bring Margaret (CFO) in on anything touching money or runway, and Ronda or Jonathan where their angle helps.",
@@ -2111,7 +2113,7 @@ Greet Brad now if this is the start.`;
   return (
     <div style={wrap}>
       {arrivalStage === "exterior" && (
-        <div onClick={() => { unlockAudio(); setArrivalStage("lobby"); }} style={{ position: "fixed", inset: 0, zIndex: 200, cursor: "pointer", overflow: "hidden",
+        <div style={{ position: "fixed", inset: 0, zIndex: 200, overflow: "hidden",
           background: "linear-gradient(180deg,#1a2438 0%,#2d3a52 35%,#4a5570 60%,#6b6680 100%)" }}>
           {/* dusk sky glow */}
           <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "55%", background: "radial-gradient(ellipse at 70% 90%, rgba(230,150,90,0.35), transparent 60%)" }} />
@@ -2142,39 +2144,81 @@ Greet Brad now if this is the start.`;
             <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, letterSpacing: 5, color: "#fff", opacity: 0.9 }}>AURORA HORIZON DIGITAL</div>
             <div style={{ fontSize: 10, color: "#fff", opacity: 0.5, letterSpacing: 2, marginTop: 4 }}>WOODSTOCK, NB</div>
           </div>
-          <div style={{ position: "absolute", bottom: "4%", left: 0, right: 0, textAlign: "center", color: "#fff", opacity: 0.8, fontSize: 13, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, animation: "pulse 1.6s infinite" }}>
-            ▸ TAP TO ENTER ◂
+          <div style={{ position: "absolute", bottom: "6%", left: 0, right: 0, textAlign: "center" }}>
+            <div style={{ color: "#fff", opacity: 0.85, fontSize: 12, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 2, marginBottom: 12 }}>WHO'S ARRIVING?</div>
+            <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+              <button onClick={() => { setMyName("Brad"); setMyRole("brad"); localStorage.setItem("victor_name","Brad"); unlockAudio(); setArrivalStage("lobby"); }}
+                style={{ background: `${T.green}22`, border: `1.5px solid ${T.green}`, color: T.green, borderRadius: 10, padding: "12px 26px", fontSize: 14, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, cursor: "pointer" }}>BRAD</button>
+              <button onClick={() => { setMyName("Jonathan"); setMyRole("jonathan"); localStorage.setItem("victor_name","Jonathan"); unlockAudio(); setArrivalStage("lobby"); }}
+                style={{ background: `${T.amber}22`, border: `1.5px solid ${T.amber}`, color: T.amber, borderRadius: 10, padding: "12px 26px", fontSize: 14, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, cursor: "pointer" }}>JONATHAN</button>
+            </div>
           </div>
         </div>
       )}
 
       {arrivalStage === "lobby" && (
-        <div onClick={() => { startElevatorMusic(); unlockVoice(); setArrivalStage("elevator"); }} style={{ position: "fixed", inset: 0, zIndex: 200, cursor: "pointer", overflow: "hidden",
+        <div style={{ position: "fixed", inset: 0, zIndex: 200, overflow: "hidden",
           background: "linear-gradient(180deg,#0e141c 0%,#141c26 60%,#0a0e13 100%)" }}>
           {/* lobby header */}
-          <div style={{ position: "absolute", top: "8%", left: 0, right: 0, textAlign: "center" }}>
+          <div style={{ position: "absolute", top: "7%", left: 0, right: 0, textAlign: "center" }}>
             <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, letterSpacing: 4, color: T.muted }}>GROUND FLOOR LOBBY</div>
             <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13, letterSpacing: 2, color: T.cyan, marginTop: 4 }}>AURORA HORIZON DIGITAL</div>
           </div>
           {/* marble floor */}
           <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "40%", background: "linear-gradient(180deg,#1a2430,#0a0e13)", boxShadow: "inset 0 8px 30px rgba(0,0,0,0.5)" }} />
-          {/* reception plant + desk hint */}
-          <div style={{ position: "absolute", bottom: "38%", left: "16%", fontSize: 28 }}>🪴</div>
+          <div style={{ position: "absolute", bottom: "38%", left: "12%", fontSize: 28 }}>🪴</div>
           {/* the elevator at the back */}
-          <div style={{ position: "absolute", top: "32%", left: "50%", transform: "translateX(-50%)", width: 120, height: 180, border: `2px solid ${T.cyan}55`, borderRadius: "6px 6px 0 0", background: "linear-gradient(180deg,#10171f,#0a0e13)", boxShadow: `0 0 40px ${T.cyan}22` }}>
-            {/* elevator call light */}
+          <div style={{ position: "absolute", top: "26%", left: "50%", transform: "translateX(-50%)", width: 130, height: 190, border: `2px solid ${cardSwiped ? T.green : T.cyan}55`, borderRadius: "6px 6px 0 0", background: "linear-gradient(180deg,#10171f,#0a0e13)", boxShadow: `0 0 40px ${cardSwiped ? T.green : T.cyan}22`, transition: "all .4s ease" }}>
             <div style={{ position: "absolute", top: -16, left: "50%", transform: "translateX(-50%)", display: "flex", gap: 4, alignItems: "center" }}>
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.cyan, boxShadow: `0 0 8px ${T.cyan}`, animation: "pulse 1s infinite" }} />
-              <span style={{ fontSize: 9, color: T.cyan, fontFamily: "'JetBrains Mono',monospace" }}>▲</span>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: cardSwiped ? T.green : T.cyan, boxShadow: `0 0 8px ${cardSwiped ? T.green : T.cyan}`, animation: "pulse 1s infinite" }} />
+              <span style={{ fontSize: 9, color: cardSwiped ? T.green : T.cyan, fontFamily: "'JetBrains Mono',monospace" }}>▲</span>
             </div>
-            {/* doors */}
-            <div style={{ position: "absolute", inset: "8px", display: "flex" }}>
-              <div style={{ width: "50%", background: "linear-gradient(90deg,#1c2733,#131b24)", borderRight: `1px solid ${T.cyan}33` }} />
-              <div style={{ width: "50%", background: "linear-gradient(270deg,#1c2733,#131b24)", borderLeft: `1px solid ${T.cyan}33` }} />
+            {/* doors — slide open after swipe */}
+            <div style={{ position: "absolute", inset: "8px", display: "flex", overflow: "hidden" }}>
+              <div style={{ width: "50%", background: "linear-gradient(90deg,#1c2733,#131b24)", borderRight: `1px solid ${T.cyan}33`, transform: cardSwiped ? "translateX(-100%)" : "translateX(0)", transition: "transform 1s ease-in-out" }} />
+              <div style={{ width: "50%", background: "linear-gradient(270deg,#1c2733,#131b24)", borderLeft: `1px solid ${T.cyan}33`, transform: cardSwiped ? "translateX(100%)" : "translateX(0)", transition: "transform 1s ease-in-out" }} />
             </div>
+            {cardSwiped && <div style={{ position: "absolute", inset: "8px", background: "radial-gradient(circle, rgba(95,208,140,0.18), transparent 70%)", zIndex: -1 }} />}
           </div>
-          <div style={{ position: "absolute", bottom: "4%", left: 0, right: 0, textAlign: "center", color: "#fff", opacity: 0.8, fontSize: 13, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, animation: "pulse 1.6s infinite" }}>
-            ▸ TAP THE ELEVATOR ◂
+
+          {/* === CARD READER === */}
+          <div style={{ position: "absolute", top: "30%", left: "calc(50% + 80px)", width: 46, height: 78, borderRadius: 8, background: "linear-gradient(180deg,#1a2330,#0e141c)", border: `1px solid ${cardSwiped ? T.green : T.cyanDim}`, boxShadow: `0 0 16px ${cardSwiped ? T.green : T.cyan}33`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6 }}>
+            <span style={{ width: 8, height: 8, borderRadius: "50%", background: cardSwiped ? T.green : "#c0492f", boxShadow: `0 0 8px ${cardSwiped ? T.green : "#c0492f"}`, transition: "all .3s" }} />
+            <div style={{ width: 30, height: 2, background: cardSwiped ? T.green : T.cyanDim, borderRadius: 1 }} />
+            <div style={{ fontSize: 6.5, color: T.muted, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 0.5, textAlign: "center" }}>{cardSwiped ? "OK" : "SCAN"}</div>
+          </div>
+
+          {/* === THE ID CARD (swipes when tapped) === */}
+          {!cardSwiped && (
+            <button onClick={() => {
+                setCardSwiped(true);
+                // beep on swipe
+                try { const AC = window.AudioContext||window.webkitAudioContext; if(AC){ const c=new AC(); const o=c.createOscillator(); const g=c.createGain(); o.type="square"; o.frequency.value=880; g.gain.setValueAtTime(0.05,c.currentTime); g.gain.exponentialRampToValueAtTime(0.0001,c.currentTime+0.18); o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime+0.2);} } catch(e){}
+                // after doors open, start the ride
+                setTimeout(() => { startElevatorMusic(); unlockVoice(); setArrivalStage("elevator"); }, 1300);
+              }}
+              style={{ position: "absolute", bottom: "16%", left: "50%", transform: "translateX(-50%)", width: 150, height: 94, borderRadius: 10, border: "none", cursor: "pointer", padding: 0, animation: "cardBob 1.8s ease-in-out infinite",
+                background: `linear-gradient(135deg, ${myRole === "jonathan" ? "#caa14a" : "#3a8a5e"}, #1a2230)`, boxShadow: "0 8px 22px rgba(0,0,0,0.5)", overflow: "hidden", textAlign: "left" }}>
+              <div style={{ padding: "8px 10px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 12 }}>🍁</span>
+                  <span style={{ fontSize: 7, color: "#fff", opacity: 0.8, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1 }}>AURORA HORIZON</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
+                  <div style={{ width: 30, height: 30, borderRadius: 4, background: "rgba(255,255,255,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>{myRole === "jonathan" ? "🧑" : "👤"}</div>
+                  <div>
+                    <div style={{ fontSize: 11, color: "#fff", fontWeight: 700 }}>{myName || "Brad"}</div>
+                    <div style={{ fontSize: 6.5, color: "#fff", opacity: 0.7, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 0.5 }}>CO-OWNER / FOUNDER</div>
+                  </div>
+                </div>
+                {/* magnetic stripe */}
+                <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 12, background: "#0a0e13" }} />
+              </div>
+            </button>
+          )}
+
+          <div style={{ position: "absolute", bottom: "5%", left: 0, right: 0, textAlign: "center", color: "#fff", opacity: 0.8, fontSize: 13, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, animation: "pulse 1.6s infinite" }}>
+            {cardSwiped ? "Access granted — step in" : "▸ TAP YOUR ID CARD TO SWIPE ◂"}
           </div>
         </div>
       )}
@@ -2336,6 +2380,7 @@ Greet Brad now if this is the start.`;
         *::-webkit-scrollbar{width:8px;height:8px}*::-webkit-scrollbar-thumb{background:${T.line};border-radius:8px}
         textarea:focus,input:focus{outline:none;border-color:${T.cyan}!important}
         @keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+        @keyframes cardBob { 0%,100% { transform: translateX(-50%) translateY(0); } 50% { transform: translateX(-50%) translateY(-6px); } }
         @keyframes rainFall { from { transform: translateY(0); } to { transform: translateY(90px); } }
         @keyframes snowFall { from { transform: translateY(0) translateX(0); } to { transform: translateY(90px) translateX(6px); } }
         @keyframes gesture { 0%,100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-5px) rotate(-12deg); } }
