@@ -386,10 +386,14 @@ export default function Victor() {
     try {
       if (!elevAudioRef.current) elevAudioRef.current = new Audio("/elevator.mp3");
       const a = elevAudioRef.current;
-      a.loop = true; a.volume = 0.5;
-      // play+immediately pause unlocks autoplay permission within the gesture
-      const p = a.play();
-      if (p && p.then) p.then(() => { a.pause(); a.currentTime = 0; }).catch(() => {});
+      a.loop = true; a.volume = 1.0;
+      // start it right here inside the click gesture so the browser allows it
+      a.play().catch(() => {});
+    } catch(e) {}
+    // Unlock the voice audio channel within this gesture so Vivian/cast voices can play later.
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) { if (!window.__victorAC) window.__victorAC = new AC(); if (window.__victorAC.state === "suspended") window.__victorAC.resume(); }
     } catch(e) {}
   }
 
@@ -406,23 +410,15 @@ export default function Victor() {
       if (f >= total) { clearInterval(climb); setTimeout(() => setArrivalStage("reception"), 900); }
     }, step);
 
-    // play the real elevator music file (looped through the ride)
+    // music was already started inside the tap gesture (primeElevatorAudio); just ensure it's going
     let stopMusic = () => {};
     try {
       const audio = elevAudioRef.current || new Audio("/elevator.mp3");
       elevAudioRef.current = audio;
-      audio.loop = true;
-      audio.volume = 0.6;
-      audio.muted = false;
-      const tryPlay = () => audio.play().then(() => { console.log("ELEVATOR MUSIC: playing"); }).catch(err => {
-        console.warn("ELEVATOR MUSIC blocked:", err && err.name, err && err.message);
-        // fallback: retry on the next click anywhere
-        const retry = () => { audio.play().catch(()=>{}); document.removeEventListener("click", retry); document.removeEventListener("touchstart", retry); };
-        document.addEventListener("click", retry); document.addEventListener("touchstart", retry);
-      });
-      tryPlay();
+      audio.loop = true; audio.volume = 1.0; audio.muted = false;
+      if (audio.paused) audio.play().catch(()=>{});
       stopMusic = () => { try { audio.pause(); audio.currentTime = 0; } catch(e){} };
-    } catch(e) { console.warn("ELEVATOR MUSIC error:", e); }
+    } catch(e) {}
 
     return () => { clearInterval(climb); stopMusic(); };
     // eslint-disable-next-line
