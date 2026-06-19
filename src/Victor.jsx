@@ -409,15 +409,20 @@ export default function Victor() {
     // play the real elevator music file (looped through the ride)
     let stopMusic = () => {};
     try {
-      // reuse the pre-unlocked audio element if present, else create one
-      let audio = elevAudioRef.current;
-      if (!audio) { audio = new Audio("/elevator.mp3"); elevAudioRef.current = audio; }
+      const audio = elevAudioRef.current || new Audio("/elevator.mp3");
+      elevAudioRef.current = audio;
       audio.loop = true;
-      audio.volume = 0.5;
-      audio.currentTime = 0;
-      audio.play().catch(() => {});
+      audio.volume = 0.6;
+      audio.muted = false;
+      const tryPlay = () => audio.play().then(() => { console.log("ELEVATOR MUSIC: playing"); }).catch(err => {
+        console.warn("ELEVATOR MUSIC blocked:", err && err.name, err && err.message);
+        // fallback: retry on the next click anywhere
+        const retry = () => { audio.play().catch(()=>{}); document.removeEventListener("click", retry); document.removeEventListener("touchstart", retry); };
+        document.addEventListener("click", retry); document.addEventListener("touchstart", retry);
+      });
+      tryPlay();
       stopMusic = () => { try { audio.pause(); audio.currentTime = 0; } catch(e){} };
-    } catch(e) {}
+    } catch(e) { console.warn("ELEVATOR MUSIC error:", e); }
 
     return () => { clearInterval(climb); stopMusic(); };
     // eslint-disable-next-line
