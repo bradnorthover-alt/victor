@@ -82,10 +82,10 @@ const store = {
   },
 };
 const K = { msgs: "victor:messages", rules: "victor:rules", state: "victor:companystate",
-  ledger: "victor:ledger", persona: "victor:persona", mode: "victor:mode", projects: "victor:projects", archive: "victor:archive", finance: "victor:finance", openactions: "victor:openactions" };
+  ledger: "victor:ledger", persona: "victor:persona", mode: "victor:mode", projects: "victor:projects", archive: "victor:archive", finance: "victor:finance", openactions: "victor:openactions", outcomes: "victor:outcomes" };
 
 // ---------- the system prompt that makes Victor, Victor ----------
-function buildSystem({ rules, companyState, mode, persona, ledger, projects, finance, openActions, attendance, summonedNames }) {
+function buildSystem({ rules, companyState, mode, persona, ledger, projects, finance, openActions, attendance, summonedNames, outcomes, meetingMins }) {
   const modeLine = mode === "auto"
     ? "Assess the situation yourself and operate in EXPANSION (A), STEADY (B), or CRISIS (C)."
     : `Brad has set you to ${MODES[mode].label} mode (${mode}). Operate in it unless the data screams otherwise — if it does, say so.`;
@@ -158,6 +158,14 @@ HOW YOU OPERATE AS AN ADVISOR (sharpen every interaction \u2014 these are about 
 - CELEBRATE REAL WINS: When something genuinely good happens \u2014 first user, a shipped build, a real milestone \u2014 actually mark it. Don't rush past it to the next problem.
 - HONEST ABOUT UNCERTAINTY: When you don't know, say "I don't know \u2014 and here's how we'd find out." Never fill the gap with confident-sounding invention.
 
+CONTINUITY & HUMANITY (build a real, evolving working relationship over time \u2014 AI cast only):
+- REMEMBER THE PERSONAL: When Brad shares something personal (he's engaged to Jonathan, he games, he's tired, a life event), remember it and bring it up naturally later when it fits. Use your PERSONA notes to carry these forward. Never force it; let it surface like a colleague who actually knows him.
+- RUNNING THREADS / INSIDE BITS: Light callbacks to earlier moments build over sessions \u2014 a recurring bit, a shared reference, "the usual." Keep it subtle and warm, never forced or cutesy.
+- DISAGREEMENT ESCALATION & RESOLUTION: When the cast disagrees, let it build naturally \u2014 a sharper exchange, even a brief interruption ([Margaret] cutting in) \u2014 then resolve it: someone concedes, or you call it, and the room moves on. Real tension that lands somewhere, not endless bickering.
+- EVOLVING OPINIONS OF EACH OTHER: The cast's read of each other can shift \u2014 Margaret grudgingly respects a Priya call that paid off; Theo defers to Desmond on a risk he flagged. Reference these lightly over time.
+- OPENING SMALL TALK: At the very start of a meeting (before business), a brief human beat is fine \u2014 a hello, a quick "how was the weekend," a comment on the late hour \u2014 one or two lines, then to work. Skip it in crisis mode.
+- FATIGUE BY MEETING LENGTH: If a meeting has run long (you'll see the elapsed time context), the room gets a touch more clipped and someone may suggest wrapping or a break (Rule 3). Energy is a real resource.
+
 INVIOLABLE RULES \u2014 these override every recommendation. If an option breaks one, you do not recommend it; you say which rule and why:
 ${rules.map((r, i) => `${i + 1}. ${r}`).join("\n")}
 
@@ -175,6 +183,8 @@ ${openActions && openActions.length ? openActions.map((a) => `- ${a}`).join("\n"
 ADVISORS CURRENTLY SUMMONED TO THE TABLE (you may bring these in; do NOT speak for any advisor not on this list):
 ${summonedNames && summonedNames.length ? summonedNames.map(n => `- ${n}`).join("\n") : "(No outside advisors summoned. Core table only: you, Margaret, Ronda, Brad" + (attendance && attendance.inRoom && attendance.jonathanHere ? ", Jonathan" : "") + ".)"}
 
+${meetingMins !== null && meetingMins !== undefined ? `MEETING ELAPSED: ${meetingMins} minute(s). ${meetingMins >= 20 ? "This has run long \u2014 tighten up; consider suggesting a wrap or break (Rule 3)." : ""}` : ""}
+
 WHO IS AT THE TABLE RIGHT NOW (for roll call \u2014 do not claim someone is present who isn't):
 ${attendance && attendance.inRoom
   ? `Live room is active. Brad is present. Jonathan is ${attendance.jonathanHere ? "PRESENT (has joined the room)" : "NOT yet joined (absent \u2014 do not speak for him)"}. Margaret (CFO) and Ronda (Office Administrator) are present as your standing team.`
@@ -183,8 +193,9 @@ ${attendance && attendance.inRoom
 YOUR EVOLVING READ (private notes from past sessions \u2014 sharpen them as you learn him):
 ${persona && persona.trim() ? persona : "(No notes yet. Form your read of Brad and the business as you go.)"}
 
-DECISIONS ON THE LEDGER:
-${ledger && ledger.length ? ledger.map((d) => `- ${d}`).join("\n") : "(Nothing logged yet.)"}
+DECISIONS ON THE LEDGER (with how they turned out \u2014 learn from your track record; reference past calls when relevant):
+${ledger && ledger.length ? ledger.map((d) => { const o = outcomes && outcomes[d]; const tag = o ? (o.status === "worked" ? " [WORKED]" : o.status === "failed" ? " [DIDN'T WORK]" : " [pending]") : ""; return `- ${d}${tag}`; }).join("\n") : "(Nothing logged yet.)"}
+${outcomes && Object.keys(outcomes).length ? `SCORECARD: ${Object.values(outcomes).filter(o=>o.status==="worked").length} worked, ${Object.values(outcomes).filter(o=>o.status==="failed").length} didn't, ${Object.values(outcomes).filter(o=>o.status==="pending").length} pending. Be honest about what hasn't worked; don't repeat losing patterns.` : ""}
 
 OPEN PROJECTS (what Brad currently has in flight — weigh these in every briefing, priority call, and meeting):
 ${projects && projects.length ? projects.map((p) => `- ${p}`).join("\n") : "(Brad has not listed any open projects yet.)"}
@@ -334,6 +345,7 @@ export default function Victor() {
   const [finance, setFinance] = useState("");
   const [openActions, setOpenActions] = useState([]);
   const [ledger, setLedger] = useState([]);
+  const [outcomes, setOutcomes] = useState({}); // { decisionText: { status: "pending|worked|failed", when: ts } }
   const [projects, setProjects] = useState([]);
   const [persona, setPersona] = useState("");
   const [mode, setMode] = useState("A");
@@ -347,6 +359,19 @@ export default function Victor() {
   const [ambient, setAmbient] = useState("");
   const [agenda, setAgenda] = useState("");
   const [meetingLive, setMeetingLive] = useState(false);
+  const [meetingStart, setMeetingStart] = useState(null);
+  const [meetingClock, setMeetingClock] = useState(0);
+  const [ambienceOn, setAmbienceOn] = useState(true);
+  const [weather, setWeather] = useState(null); // {code, isDay}
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch("https://api.open-meteo.com/v1/forecast?latitude=46.15&longitude=-67.57&current=weather_code,is_day");
+        const d = await r.json();
+        if (d && d.current) setWeather({ code: d.current.weather_code, isDay: d.current.is_day === 1 });
+      } catch (e) { /* fail silently — window just shows default */ }
+    })();
+  }, []);
   const [meetingArchive, setMeetingArchive] = useState([]);
   const [actions, setActions] = useState([]);
   const [minutes, setMinutes] = useState([]);
@@ -359,6 +384,9 @@ export default function Victor() {
   const [summoned, setSummoned] = useState([]); // advisor ids currently at the table
   const [guestRole, setGuestRole] = useState(""); // optional custom guest descriptor
   const [timeOfDay, setTimeOfDay] = useState("night"); // day | dusk | night
+  const [clockNow, setClockNow] = useState(new Date());
+  useEffect(() => { const t = setInterval(() => setClockNow(new Date()), 1000); return () => clearInterval(t); }, []);
+  useEffect(() => { if (!meetingLive || !meetingStart) { setMeetingClock(0); return; } const t = setInterval(() => setMeetingClock(Math.floor((Date.now() - meetingStart) / 1000)), 1000); return () => clearInterval(t); }, [meetingLive, meetingStart]);
   const [vote, setVote] = useState(null);  // {question, victor:{choice,reason}, brad:choice|null, jonathan:'pending'|choice}
   // --- Room state (Milestone 2: shared live meeting) ---
   const [myName, setMyName] = useState(() => localStorage.getItem('victor_name') || '');
@@ -396,6 +424,7 @@ export default function Victor() {
       if (r) try { setRules(JSON.parse(r)); } catch {}
       if (s) setCompanyState(s);
       if (l) try { setLedger(JSON.parse(l)); } catch {}
+      try { const oc = await store.get(K.outcomes); if (oc) setOutcomes(JSON.parse(oc)); } catch {}
       if (p) setPersona(p);
       if (md) setMode(md);
       if (pr) try { setProjects(JSON.parse(pr)); } catch {}
@@ -506,7 +535,7 @@ export default function Victor() {
     setLoading(true);
     setError("");
     try {
-      const system = buildSystem({ rules, companyState, mode, persona, ledger, projects, finance, openActions, attendance: roomCode ? { inRoom: true, jonathanHere: !!roomOnline.jonathan, names: roomNames } : { inRoom: false }, summonedNames: summoned.map(id => ADVISORS[id] ? `${ADVISORS[id].name} (${ADVISORS[id].role})` : id) });
+      const system = buildSystem({ rules, companyState, mode, persona, ledger, projects, finance, openActions, attendance: roomCode ? { inRoom: true, jonathanHere: !!roomOnline.jonathan, names: roomNames } : { inRoom: false }, summonedNames: summoned.map(id => ADVISORS[id] ? `${ADVISORS[id].name} (${ADVISORS[id].role})` : id), outcomes, meetingMins: meetingLive ? Math.floor(meetingClock/60) : null });
       const res = await fetch("/api/claude", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -526,7 +555,7 @@ export default function Victor() {
       setMessages(out);
       store.set(K.msgs, JSON.stringify(out));
       if (np) { const merged = (persona ? persona + " " : "") + np; setPersona(merged); store.set(K.persona, merged); }
-      if (nl) { const ml = [...ledger, nl]; setLedger(ml); store.set(K.ledger, JSON.stringify(ml)); }
+      if (nl) { const ml = [...ledger, nl]; setLedger(ml); store.set(K.ledger, JSON.stringify(ml)); const no = { ...outcomes, [nl]: { status: 'pending', when: Date.now() } }; setOutcomes(no); store.set(K.outcomes, JSON.stringify(no)); }
       if (!opts.noTags) {
         if (ag) setAgenda(ag);
         if (ac && ac.length) setActions(prev => [...prev, ...ac]);
@@ -561,6 +590,7 @@ export default function Victor() {
   function callMeeting() {
     setView("boardroom");
     setMeetingLive(true);
+    setMeetingStart(Date.now());
     roomUpdate({ meetingLive: true });
     setAmbient(AMBIENT[Math.floor(Math.random() * AMBIENT.length)]);
     callVictor(
@@ -897,12 +927,22 @@ export default function Victor() {
     const someoneSpeaking = !!activeSpeaker && !curSlide;
     const isSpeaker = activeSpeaker === s.id;
     const seatDim = someoneSpeaking && !isSpeaker ? 0.55 : 1;
+    // GAZE: when someone else is speaking, look toward them
+    const allSeats = [...SEATS, ...summoned.map((id,i)=>{ const a=ADVISORS[id]; const sp=[{x:8,y:58},{x:92,y:58},{x:8,y:44},{x:92,y:44}][i%4]; return a?{id:a.id,x:sp.x}:null; }).filter(Boolean)];
+    const spk = someoneSpeaking ? allSeats.find(z => z.id === activeSpeaker) : null;
+    const gazeTilt = (spk && !isSpeaker) ? Math.max(-8, Math.min(8, (spk.x - s.x) * 0.12)) : 0;
+    // FIDGET: per-character idle tic
+    const fidget = { cfo: "fidgetPen", product: "fidgetKnee" }[s.id];
     return (
       <div style={{ position: "absolute", left: `${s.x}%`, top: `${s.y}%`, transform: "translate(-50%,-50%)", textAlign: "center", zIndex: s.y > 50 ? 6 : 2, opacity: seatDim, transition: "opacity .5s ease" }}>
         {/* spotlight pool when this character is speaking */}
         {isSpeaker && (
           <div style={{ position: "absolute", left: "50%", top: "40%", transform: "translate(-50%,-50%)", width: 120, height: 120, borderRadius: "50%", pointerEvents: "none", zIndex: 0,
             background: `radial-gradient(circle, ${s.color}26 0%, ${s.color}10 40%, transparent 70%)`, animation: "spotPulse 2.4s ease-in-out infinite" }} />
+        )}
+        {/* hand gesture while speaking */}
+        {isSpeaker && (
+          <div style={{ position: "absolute", left: "62%", top: "30%", width: 7, height: 7, borderRadius: "50%", background: `${s.color}66`, border: `1px solid ${s.color}`, zIndex: 5, animation: "gesture 1.8s ease-in-out infinite", transformOrigin: "bottom center" }} />
         )}
         {/* leather office chair (always stays) */}
         <div style={{ position: "relative", width: 52, margin: "0 auto" }}>
@@ -916,16 +956,16 @@ export default function Victor() {
             boxShadow: "0 2px 4px rgba(0,0,0,0.5)",
             opacity: presenting ? 0.6 : 1,
           }} />
-          {/* seat cushion */}
+          {/* seat cushion (width varies a touch per person for distinct silhouettes) */}
           <div style={{
-            width: 46, height: 12, margin: "-4px auto 0",
+            width: ({ cfo: 42, secretary: 50, product: 52, legal: 44, marketing: 47 }[s.id] || 46), height: 12, margin: "-4px auto 0",
             borderRadius: "6px 6px 10px 10px",
             background: "linear-gradient(180deg,#222B35 0%,#141B23 100%)",
             boxShadow: "0 3px 6px rgba(0,0,0,0.6)",
           }} />
         </div>
         {/* coffee cup in front of the seat — steam always, occasional sip when NOT speaking */}
-        {!empty && !dimmed && (
+        {!empty && !dimmed && ambienceOn && (
           <div style={{ position: "absolute", left: s.y > 50 ? "26%" : "70%", top: s.y > 50 ? "2%" : "10%", zIndex: 4, transformOrigin: "bottom center",
             animation: (!isSpeaker && !curSlide && sipping) ? "sip 3s ease-in-out" : "none" }}>
             {/* steam */}
@@ -944,7 +984,7 @@ export default function Victor() {
         {!empty && !presenting && (
           <div style={{ marginTop: -34, position: "relative", zIndex: 3, opacity: dimmed ? 0.32 : 1, filter: dimmed ? "grayscale(0.7)" : "none", transition: "opacity .4s ease, filter .4s ease" }}>
             {(s.id === "victor" || s.id === "cfo" || s.id === "secretary" || s.id === "marketing" || s.id === "legal" || s.id === "product" || s.id === "guest") ? (
-              <div style={{ margin: "0 auto", width: 40, height: 40, transition: "transform .4s ease", transform: on ? "scale(1.12) translateY(-2px)" : someoneSpeaking ? "scale(0.96)" : "scale(1)" }}>
+              <div style={{ margin: "0 auto", width: 40, height: 40, transition: "transform .4s ease", transform: `${on ? "scale(1.12) translateY(-2px)" : someoneSpeaking ? "scale(0.96)" : "scale(1)"} rotate(${gazeTilt}deg)` }}>
                 <Avatar who={s.id === "cfo" ? "margaret" : s.id === "secretary" ? "ronda" : s.id === "marketing" ? "priya" : s.id === "legal" ? "desmond" : s.id === "product" ? "theo" : s.id === "guest" ? "guest" : "victor"} size={40} talking={on} />
               </div>
             ) : (
@@ -958,7 +998,9 @@ export default function Victor() {
                 animation: on && !dimmed ? "speakerGlow 1.1s ease-in-out infinite" : "none",
               }}>{displayName[0]}</div>
             )}
-            <div style={{ fontSize: 10, color: dimmed ? T.muted : s.color, marginTop: 4, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 0.5 }}>{displayName}</div>
+            {/* clothing hint: collar bar */}
+            {!empty && !dimmed && <div style={{ width: 20, height: 4, margin: "1px auto 0", borderRadius: "0 0 3px 3px", background: `linear-gradient(180deg, ${s.color}88, ${s.color}33)` }} />}
+            <div style={{ fontSize: 10, color: dimmed ? T.muted : s.color, marginTop: 3, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 0.5 }}>{displayName}</div>
             <div style={{ fontSize: 8, color: T.muted, letterSpacing: 1 }}>{dimmed ? "NOT JOINED" : s.role.toUpperCase()}</div>
             {on && !dimmed && <div style={{ fontSize: 8, color: s.color, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1 }}>● SPEAKING</div>}
           </div>
@@ -1044,10 +1086,26 @@ export default function Victor() {
             <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, letterSpacing: 1.5, color: meetingLive ? T.amber : T.muted }}>
               {meetingLive ? "MEETING IN SESSION" : "BOARDROOM \u2014 NO MEETING IN SESSION"}
             </span>
+            {meetingLive && (
+              <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, color: T.cyan, marginLeft: 4 }}>
+                {String(Math.floor(meetingClock/60)).padStart(2,"0")}:{String(meetingClock%60).padStart(2,"0")}
+              </span>
+            )}
+            {meetingLive && (() => {
+              // meeting temperature: tense if crisis/finance worry words appear recently, lifted on wins
+              const recent = [...messages].slice(-4).map(m=>m.content||"").join(" ").toLowerCase();
+              const temp = /\b(risk|crisis|can't afford|burn|danger|stuck|problem|cut)\b/.test(recent) ? {label:"TENSE",c:T.amber}
+                : /\b(win|great|strong|traction|shipped|milestone|good news)\b/.test(recent) ? {label:"PRODUCTIVE",c:T.green}
+                : {label:"STEADY",c:T.cyanDim};
+              return <span style={{ fontSize: 9, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, color: temp.c, border: `1px solid ${temp.c}55`, borderRadius: 5, padding: "2px 6px", marginLeft: 4 }}>{temp.label}</span>;
+            })()}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <button style={btn(false, T.cyanDim)} onClick={() => setTimeOfDay(t => t === "day" ? "dusk" : t === "dusk" ? "night" : "day")} title="Time of day">
               {timeOfDay === "day" ? "☀ DAY" : timeOfDay === "dusk" ? "◗ DUSK" : "☾ NIGHT"}
+            </button>
+            <button style={btn(ambienceOn, T.cyanDim)} onClick={() => setAmbienceOn(a => !a)} title="Ambient motion & props">
+              {ambienceOn ? "✨ AMBIENCE ON" : "✨ AMBIENCE OFF"}
             </button>
             <button style={btn(roomSound, T.cyanDim)} onClick={() => setRoomSound(s => !s)} title="Room ambience">
               {roomSound ? "♪ SOUND ON" : "♪ SOUND OFF"}
@@ -1127,6 +1185,15 @@ export default function Victor() {
                 ))}
                 {/* aurora shimmer nod to the company */}
                 <div style={{ position: "absolute", inset: 0, background: "linear-gradient(115deg,transparent 30%,rgba(95,208,140,0.10) 45%,rgba(79,209,224,0.10) 55%,rgba(139,127,214,0.10) 65%,transparent 80%)" }} />
+                {/* live Woodstock, NB weather */}
+                {weather && (() => {
+                  const c = weather.code;
+                  const rain = (c >= 51 && c <= 67) || (c >= 80 && c <= 82) || (c >= 95);
+                  const snow = (c >= 71 && c <= 77) || (c === 85 || c === 86);
+                  if (rain) return <div style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>{[...Array(16)].map((_,i)=><span key={i} style={{ position:"absolute", left:`${(i*23)%100}%`, top:"-10%", width:1, height:9, background:"rgba(160,200,230,0.5)", animation:`rainFall ${0.6+(i%4)*0.2}s linear ${i*0.12}s infinite` }} />)}</div>;
+                  if (snow) return <div style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>{[...Array(14)].map((_,i)=><span key={i} style={{ position:"absolute", left:`${(i*29)%100}%`, top:"-8%", width:3, height:3, borderRadius:"50%", background:"rgba(230,240,255,0.7)", animation:`snowFall ${2.5+(i%4)*0.6}s linear ${i*0.2}s infinite` }} />)}</div>;
+                  return null;
+                })()}
               </div>}
 
               {/* TALKING SCREEN: current speaker's portrait + caption (when not presenting slides) */}
@@ -1152,6 +1219,50 @@ export default function Victor() {
                 position: "absolute", bottom: 0, left: 0, right: 0, height: "48%",
                 background: "repeating-linear-gradient(90deg,#0b0f14 0px,#0b0f14 38px,#0d1219 39px,#0d1219 40px), linear-gradient(180deg,#0d1219 0%,#080b0f 100%)",
               }} />
+
+              {/* door — opens when an advisor is summoned */}
+              <div style={{ position: "absolute", top: 34, left: 0, width: 18, height: 64, zIndex: 2, perspective: 200 }}>
+                <div style={{ width: "100%", height: "100%", background: "linear-gradient(90deg,#1a222c,#0e1620)", border: `1px solid ${T.lineSoft}`, borderRadius: "0 3px 3px 0", transformOrigin: "left center", transition: "transform .6s ease", transform: summoned.length > 0 ? "rotateY(-55deg)" : "rotateY(0deg)" }}>
+                  <div style={{ position: "absolute", right: 3, top: "48%", width: 2, height: 4, background: T.cyanDim, borderRadius: 1 }} />
+                </div>
+              </div>
+
+              {/* === SET DRESSING (Batch 1) === */}
+              {/* wall clock showing real time */}
+              <div style={{ position: "absolute", top: 12, left: 14, width: 30, height: 30, borderRadius: "50%", background: "#0c1219", border: `2px solid ${T.cyanDim}`, zIndex: 3, boxShadow: "0 1px 4px rgba(0,0,0,0.5)" }}>
+                {(() => {
+                  const h = clockNow.getHours() % 12, m = clockNow.getMinutes(), s = clockNow.getSeconds();
+                  const ha = (h * 30 + m * 0.5) - 90, ma = (m * 6) - 90, sa = (s * 6) - 90;
+                  const hand = (ang, len, w, col) => <line x1="15" y1="15" x2={15 + len * Math.cos(ang * Math.PI / 180)} y2={15 + len * Math.sin(ang * Math.PI / 180)} stroke={col} strokeWidth={w} strokeLinecap="round" />;
+                  return <svg width="30" height="30" viewBox="0 0 30 30">{hand(ha, 6, 1.6, T.text)}{hand(ma, 9, 1.2, T.text)}{hand(sa, 10, 0.6, T.cyan)}<circle cx="15" cy="15" r="1.2" fill={T.cyan} /></svg>;
+                })()}
+              </div>
+
+              {/* whiteboard on the side wall — fills in with agenda + decisions */}
+              <div style={{ position: "absolute", top: 14, right: 12, width: 92, minHeight: 60, maxHeight: 120, overflow: "hidden", background: "rgba(240,244,248,0.06)", border: `1px solid ${T.lineSoft}`, borderRadius: 4, padding: "6px 8px", zIndex: 3 }}>
+                <div style={{ fontSize: 7, letterSpacing: 1.5, color: T.cyanDim, fontFamily: "'JetBrains Mono',monospace", marginBottom: 4, borderBottom: `1px solid ${T.lineSoft}`, paddingBottom: 2 }}>WHITEBOARD</div>
+                {agenda ? <div style={{ fontSize: 8, color: "#cfe6ea", lineHeight: 1.3, marginBottom: 4 }}>• {agenda}</div> : <div style={{ fontSize: 8, color: T.muted, fontStyle: "italic" }}>(empty)</div>}
+                {actions.slice(0, 3).map((a, i) => <div key={i} style={{ fontSize: 7.5, color: "#9fc4cb", lineHeight: 1.3, marginBottom: 2 }}>– {String(a).split("|")[0].trim().slice(0, 22)}</div>)}
+              </div>
+
+              {/* potted plant, left */}
+              <div style={{ position: "absolute", bottom: "44%", left: 6, zIndex: 2 }}>
+                <div style={{ width: 12, height: 9, background: "linear-gradient(180deg,#7c4d22,#5e3917)", borderRadius: "2px 2px 4px 4px", margin: "0 auto" }} />
+                <div style={{ position: "absolute", bottom: 7, left: "50%", transform: "translateX(-50%)" }}>
+                  {[...Array(5)].map((_, i) => <div key={i} style={{ position: "absolute", bottom: 0, left: 0, width: 3, height: 12 + (i % 3) * 4, background: `${T.green}88`, borderRadius: "50% 50% 0 0", transformOrigin: "bottom center", transform: `rotate(${(i - 2) * 22}deg)` }} />)}
+                </div>
+              </div>
+
+              {/* framed MapleCheck poster, right wall */}
+              <div style={{ position: "absolute", top: 50, right: 14, width: 26, height: 32, background: "#0e1620", border: `1px solid ${T.green}55`, borderRadius: 2, zIndex: 2, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <span style={{ fontSize: 13 }}>🍁</span>
+              </div>
+
+              {/* coffee station, far right back */}
+              <div style={{ position: "absolute", bottom: "46%", right: 8, zIndex: 2 }}>
+                <div style={{ width: 14, height: 10, background: "linear-gradient(180deg,#2a3440,#1a222c)", borderRadius: 2, border: "1px solid rgba(0,0,0,0.4)" }} />
+                <div style={{ width: 5, height: 5, background: "#3a2412", borderRadius: "0 0 3px 3px", margin: "1px auto 0" }} />
+              </div>
 
               {/* SCREEN GLOW SPILL — the TV throws light into the darkened room */}
               {curSlide && (
@@ -1247,6 +1358,9 @@ export default function Victor() {
                     {/* sheen */}
                     <div style={{ position: "absolute", inset: 0, borderRadius: "50%",
                       background: "linear-gradient(120deg, rgba(255,235,200,0.12) 0%, transparent 40%)" }} />
+                    {/* soft reflections of the room on the polished surface */}
+                    <div style={{ position: "absolute", inset: "8%", borderRadius: "50%", opacity: 0.18,
+                      background: "radial-gradient(ellipse at 50% 30%, rgba(180,210,255,0.4), transparent 55%), radial-gradient(ellipse at 30% 70%, rgba(216,180,90,0.3), transparent 40%), radial-gradient(ellipse at 70% 70%, rgba(139,127,214,0.3), transparent 40%)" }} />
                     {/* inlaid company mark */}
                     <div style={{ position: "absolute", inset: "34%", borderRadius: "50%", border: "1px solid rgba(255,225,180,0.18)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                       <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, letterSpacing: 3, color: "rgba(255,225,180,0.35)", transform: "rotateX(-58deg)" }}>AHD</span>
@@ -1325,9 +1439,11 @@ export default function Victor() {
               <div style={{ marginBottom: 14 }}>
                 {actions.map((a, i) => {
                   const [task, owner, when] = a.split("|").map(s => s.trim());
+                  const ownerKey = (owner || "").toLowerCase();
+                  const who = ownerKey.includes("margaret") ? "margaret" : ownerKey.includes("ronda") ? "ronda" : ownerKey.includes("priya") ? "priya" : ownerKey.includes("desmond") ? "desmond" : ownerKey.includes("theo") ? "theo" : ownerKey.includes("victor") ? "victor" : null;
                   return (
-                    <div key={i} style={{ display: "flex", gap: 8, marginBottom: 6, fontSize: 12.5, lineHeight: 1.4 }}>
-                      <span style={{ color: T.green }}>▸</span>
+                    <div key={i} style={{ display: "flex", gap: 8, marginBottom: 7, fontSize: 12.5, lineHeight: 1.4, alignItems: "flex-start" }}>
+                      {who ? <div style={{ width: 22, height: 22, flexShrink: 0 }}><Avatar who={who} size={22} /></div> : <span style={{ color: T.green, width: 22, textAlign: "center" }}>▸</span>}
                       <span style={{ flex: 1 }}>{task}{owner ? <span style={{ color: T.green }}> · {owner}</span> : null}{when ? <span style={{ color: T.muted }}> · {when}</span> : null}</span>
                     </div>
                   );
@@ -1390,6 +1506,12 @@ export default function Victor() {
         *::-webkit-scrollbar{width:8px;height:8px}*::-webkit-scrollbar-thumb{background:${T.line};border-radius:8px}
         textarea:focus,input:focus{outline:none;border-color:${T.cyan}!important}
         @keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+        @keyframes rainFall { from { transform: translateY(0); } to { transform: translateY(90px); } }
+        @keyframes snowFall { from { transform: translateY(0) translateX(0); } to { transform: translateY(90px) translateX(6px); } }
+        @keyframes gesture { 0%,100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-5px) rotate(-12deg); } }
+        @keyframes fidgetPen { 0%,90%,100% { transform: rotate(0deg); } 93% { transform: rotate(-20deg); } 96% { transform: rotate(20deg); } }
+        @keyframes fidgetKnee { 0%,100% { transform: translateY(0); } 50% { transform: translateY(1px); } }
+        @keyframes doorOpen { from { transform: scaleX(0); opacity: 0; } to { transform: scaleX(1); opacity: 1; } }
         @keyframes blink { 0%,94%,100% { transform: scaleY(1); } 97% { transform: scaleY(0.1); } }
         @keyframes talkMouth { 0%,100% { transform: scaleY(0.6); } 50% { transform: scaleY(1.4); } }
         @keyframes idleSway { 0%,100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-0.6px) rotate(-0.5deg); } }
@@ -1700,19 +1822,60 @@ export default function Victor() {
                 })}
               </div>
             )}
-            {panel === "ledger" && (
+            {panel === "ledger" && (() => {
+              const setOutcome = (d, status) => { const no = { ...outcomes, [d]: { status, when: (outcomes[d]?.when || Date.now()) } }; setOutcomes(no); store.set(K.outcomes, JSON.stringify(no)); };
+              const worked = ledger.filter(d => outcomes[d]?.status === "worked").length;
+              const failed = ledger.filter(d => outcomes[d]?.status === "failed").length;
+              const pending = ledger.filter(d => !outcomes[d] || outcomes[d].status === "pending").length;
+              const decided = worked + failed;
+              const rate = decided > 0 ? Math.round((worked / decided) * 100) : null;
+              return (
               <div>
-                <div style={{ fontSize: 12, color: T.muted, marginBottom: 12, lineHeight: 1.5 }}>Decisions you commit to in conversation land here. Victor remembers them and holds you to them.</div>
-                {ledger.length === 0 && <div style={{ color: T.muted, fontSize: 13 }}>Nothing logged yet.</div>}
-                {ledger.map((d, i) => (
-                  <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 8, padding: "10px 12px" }}>
-                    <span style={{ color: T.green, fontSize: 14 }}>▸</span>
-                    <span style={{ flex: 1, fontSize: 13, lineHeight: 1.4 }}>{d}</span>
-                    <button style={btn(false, T.amber)} onClick={() => { const nl = ledger.filter((_, j) => j !== i); setLedger(nl); store.set(K.ledger, JSON.stringify(nl)); }}>✕</button>
+                <div style={{ fontSize: 12, color: T.muted, marginBottom: 12, lineHeight: 1.5 }}>Decisions you commit to land here. Mark how each turned out \u2014 Victor learns from your track record and won't repeat losing patterns.</div>
+                {/* scorecard summary */}
+                {ledger.length > 0 && (
+                  <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+                    <div style={{ flex: 1, minWidth: 70, background: `${T.green}12`, border: `1px solid ${T.green}44`, borderRadius: 8, padding: "8px 10px", textAlign: "center" }}>
+                      <div style={{ fontSize: 20, fontWeight: 700, color: T.green, fontFamily: "'JetBrains Mono',monospace" }}>{worked}</div>
+                      <div style={{ fontSize: 9, color: T.muted, letterSpacing: 1 }}>WORKED</div>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 70, background: `${T.amber}12`, border: `1px solid ${T.amber}44`, borderRadius: 8, padding: "8px 10px", textAlign: "center" }}>
+                      <div style={{ fontSize: 20, fontWeight: 700, color: T.amber, fontFamily: "'JetBrains Mono',monospace" }}>{failed}</div>
+                      <div style={{ fontSize: 9, color: T.muted, letterSpacing: 1 }}>DIDN'T</div>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 70, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 8, padding: "8px 10px", textAlign: "center" }}>
+                      <div style={{ fontSize: 20, fontWeight: 700, color: T.cyanDim, fontFamily: "'JetBrains Mono',monospace" }}>{pending}</div>
+                      <div style={{ fontSize: 9, color: T.muted, letterSpacing: 1 }}>PENDING</div>
+                    </div>
+                    {rate !== null && (
+                      <div style={{ flex: 1, minWidth: 70, background: `${T.cyan}12`, border: `1px solid ${T.cyan}44`, borderRadius: 8, padding: "8px 10px", textAlign: "center" }}>
+                        <div style={{ fontSize: 20, fontWeight: 700, color: T.cyan, fontFamily: "'JetBrains Mono',monospace" }}>{rate}%</div>
+                        <div style={{ fontSize: 9, color: T.muted, letterSpacing: 1 }}>HIT RATE</div>
+                      </div>
+                    )}
                   </div>
-                ))}
+                )}
+                {ledger.length === 0 && <div style={{ color: T.muted, fontSize: 13 }}>Nothing logged yet.</div>}
+                {ledger.map((d, i) => {
+                  const st = outcomes[d]?.status || "pending";
+                  const stripe = st === "worked" ? T.green : st === "failed" ? T.amber : T.cyanDim;
+                  return (
+                    <div key={i} style={{ marginBottom: 8, background: T.panel, border: `1px solid ${T.line}`, borderLeft: `3px solid ${stripe}`, borderRadius: 8, padding: "10px 12px" }}>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
+                        <span style={{ flex: 1, fontSize: 13, lineHeight: 1.4 }}>{d}</span>
+                        <button style={{ ...btn(false, T.amber), fontSize: 10, padding: "2px 7px" }} onClick={() => { const nl = ledger.filter((_, j) => j !== i); setLedger(nl); store.set(K.ledger, JSON.stringify(nl)); const no = { ...outcomes }; delete no[d]; setOutcomes(no); store.set(K.outcomes, JSON.stringify(no)); }}>✕</button>
+                      </div>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button style={{ ...btn(st === "worked", T.green), fontSize: 10, padding: "3px 9px" }} onClick={() => setOutcome(d, "worked")}>WORKED</button>
+                        <button style={{ ...btn(st === "failed", T.amber), fontSize: 10, padding: "3px 9px" }} onClick={() => setOutcome(d, "failed")}>DIDN'T WORK</button>
+                        <button style={{ ...btn(st === "pending", T.cyanDim), fontSize: 10, padding: "3px 9px" }} onClick={() => setOutcome(d, "pending")}>PENDING</button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            )}
+              );
+            })()}
           </div>
         </div>
       )}
