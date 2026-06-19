@@ -381,6 +381,17 @@ export default function Victor() {
   const [vivianGreeted, setVivianGreeted] = useState(false);
   const [usualDrink, setUsualDrink] = useState(""); // remembered favorite
   const elevAudioRef = useRef(null);
+  // Prime the elevator audio on a user gesture so the browser allows it to play later.
+  function primeElevatorAudio() {
+    try {
+      if (!elevAudioRef.current) elevAudioRef.current = new Audio("/elevator.mp3");
+      const a = elevAudioRef.current;
+      a.loop = true; a.volume = 0.5;
+      // play+immediately pause unlocks autoplay permission within the gesture
+      const p = a.play();
+      if (p && p.then) p.then(() => { a.pause(); a.currentTime = 0; }).catch(() => {});
+    } catch(e) {}
+  }
 
   // Elevator ride: climb floors 1 -> 30 over ~30 seconds, then arrive at reception.
   useEffect(() => {
@@ -398,11 +409,13 @@ export default function Victor() {
     // play the real elevator music file (looped through the ride)
     let stopMusic = () => {};
     try {
-      const audio = new Audio("/elevator.mp3");
+      // reuse the pre-unlocked audio element if present, else create one
+      let audio = elevAudioRef.current;
+      if (!audio) { audio = new Audio("/elevator.mp3"); elevAudioRef.current = audio; }
       audio.loop = true;
       audio.volume = 0.5;
-      audio.play().catch(() => {}); // may be blocked until a user gesture; the tap-to-enter covers this
-      elevAudioRef.current = audio;
+      audio.currentTime = 0;
+      audio.play().catch(() => {});
       stopMusic = () => { try { audio.pause(); audio.currentTime = 0; } catch(e){} };
     } catch(e) {}
 
@@ -2014,7 +2027,7 @@ Greet Brad now if this is the start.`;
   return (
     <div style={wrap}>
       {arrivalStage === "exterior" && (
-        <div onClick={() => setArrivalStage("lobby")} style={{ position: "fixed", inset: 0, zIndex: 200, cursor: "pointer", overflow: "hidden",
+        <div onClick={() => { primeElevatorAudio(); setArrivalStage("lobby"); }} style={{ position: "fixed", inset: 0, zIndex: 200, cursor: "pointer", overflow: "hidden",
           background: "linear-gradient(180deg,#1a2438 0%,#2d3a52 35%,#4a5570 60%,#6b6680 100%)" }}>
           {/* dusk sky glow */}
           <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "55%", background: "radial-gradient(ellipse at 70% 90%, rgba(230,150,90,0.35), transparent 60%)" }} />
@@ -2052,7 +2065,7 @@ Greet Brad now if this is the start.`;
       )}
 
       {arrivalStage === "lobby" && (
-        <div onClick={() => setArrivalStage("elevator")} style={{ position: "fixed", inset: 0, zIndex: 200, cursor: "pointer", overflow: "hidden",
+        <div onClick={() => { primeElevatorAudio(); setArrivalStage("elevator"); }} style={{ position: "fixed", inset: 0, zIndex: 200, cursor: "pointer", overflow: "hidden",
           background: "linear-gradient(180deg,#0e141c 0%,#141c26 60%,#0a0e13 100%)" }}>
           {/* lobby header */}
           <div style={{ position: "absolute", top: "8%", left: 0, right: 0, textAlign: "center" }}>
