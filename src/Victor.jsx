@@ -793,22 +793,30 @@ export default function Victor() {
     guest: "onwK4e9ZLuTAKqWW03F9",    // Daniel — neutral male
   };
 
+  function stripStage(s) {
+    // remove *[...]* and standalone [phrase] stage directions and surrounding asterisks
+    return (s || "")
+      .replace(/\*?\[[^\]]*\]\*?/g, " ")
+      .replace(/\*[^*]*\*/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
   function parseTurns(text) {
     if (!text) return [];
     const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
     const turns = [];
     let cur = null;
     for (const ln of lines) {
-      const stage = ln.match(/^\[(.+\s.+)\]$/);   // bracketed phrase = stage direction, skip for speaking
+      const stageOnly = ln.match(/^\*?\[(.+\s.+)\]\*?$/);   // a whole line that's just a stage direction
       const sp = ln.match(/^\[([A-Za-z]+)\]\s*(.*)$/);
-      if (stage && !sp) continue;
+      if (stageOnly && !sp) continue;
       if (sp) {
         if (cur) turns.push(cur);
-        cur = { who: sp[1].toLowerCase(), said: sp[2] || "" };
+        cur = { who: sp[1].toLowerCase(), said: stripStage(sp[2] || "") };
       } else if (cur) {
-        cur.said += (cur.said ? " " : "") + ln;
+        cur.said += (cur.said ? " " : "") + stripStage(ln);
       } else {
-        cur = { who: "victor", said: ln };
+        cur = { who: "victor", said: stripStage(ln) };
       }
     }
     if (cur) turns.push(cur);
