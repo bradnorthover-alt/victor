@@ -382,18 +382,28 @@ export default function Victor() {
   const [usualDrink, setUsualDrink] = useState(""); // remembered favorite
   const elevAudioRef = useRef(null);
   // Prime the elevator audio on a user gesture so the browser allows it to play later.
-  function primeElevatorAudio() {
+  // Unlock audio silently on early taps (building/lobby) WITHOUT starting the music yet.
+  function unlockAudio() {
     try {
       if (!elevAudioRef.current) elevAudioRef.current = new Audio("/elevator.mp3");
       const a = elevAudioRef.current;
-      a.loop = true; a.volume = 1.0;
-      // start it right here inside the click gesture so the browser allows it
-      a.play().catch(() => {});
+      a.loop = true; a.volume = 1.0; a.muted = true;
+      // play+pause while muted unlocks permission without making sound
+      const p = a.play();
+      if (p && p.then) p.then(() => { a.pause(); a.currentTime = 0; a.muted = false; }).catch(() => { a.muted = false; });
     } catch(e) {}
-    // Unlock the voice audio channel within this gesture so Vivian/cast voices can play later.
     try {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (AC) { if (!window.__victorAC) window.__victorAC = new AC(); if (window.__victorAC.state === "suspended") window.__victorAC.resume(); }
+    } catch(e) {}
+  }
+  // Start the elevator music (called when the ride begins).
+  function startElevatorMusic() {
+    try {
+      if (!elevAudioRef.current) elevAudioRef.current = new Audio("/elevator.mp3");
+      const a = elevAudioRef.current;
+      a.loop = true; a.volume = 1.0; a.muted = false; a.currentTime = 0;
+      a.play().catch(()=>{});
     } catch(e) {}
   }
 
@@ -410,15 +420,9 @@ export default function Victor() {
       if (f >= total) { clearInterval(climb); setTimeout(() => setArrivalStage("reception"), 900); }
     }, step);
 
-    // music was already started inside the tap gesture (primeElevatorAudio); just ensure it's going
-    let stopMusic = () => {};
-    try {
-      const audio = elevAudioRef.current || new Audio("/elevator.mp3");
-      elevAudioRef.current = audio;
-      audio.loop = true; audio.volume = 1.0; audio.muted = false;
-      if (audio.paused) audio.play().catch(()=>{});
-      stopMusic = () => { try { audio.pause(); audio.currentTime = 0; } catch(e){} };
-    } catch(e) {}
+    // start the music now that the ride is beginning (audio was unlocked by the earlier tap)
+    startElevatorMusic();
+    let stopMusic = () => { try { if (elevAudioRef.current) { elevAudioRef.current.pause(); elevAudioRef.current.currentTime = 0; } } catch(e){} };
 
     return () => { clearInterval(climb); stopMusic(); };
     // eslint-disable-next-line
@@ -2028,7 +2032,7 @@ Greet Brad now if this is the start.`;
   return (
     <div style={wrap}>
       {arrivalStage === "exterior" && (
-        <div onClick={() => { primeElevatorAudio(); setArrivalStage("lobby"); }} style={{ position: "fixed", inset: 0, zIndex: 200, cursor: "pointer", overflow: "hidden",
+        <div onClick={() => { unlockAudio(); setArrivalStage("lobby"); }} style={{ position: "fixed", inset: 0, zIndex: 200, cursor: "pointer", overflow: "hidden",
           background: "linear-gradient(180deg,#1a2438 0%,#2d3a52 35%,#4a5570 60%,#6b6680 100%)" }}>
           {/* dusk sky glow */}
           <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "55%", background: "radial-gradient(ellipse at 70% 90%, rgba(230,150,90,0.35), transparent 60%)" }} />
@@ -2066,7 +2070,7 @@ Greet Brad now if this is the start.`;
       )}
 
       {arrivalStage === "lobby" && (
-        <div onClick={() => { primeElevatorAudio(); setArrivalStage("elevator"); }} style={{ position: "fixed", inset: 0, zIndex: 200, cursor: "pointer", overflow: "hidden",
+        <div onClick={() => { unlockAudio(); setArrivalStage("elevator"); }} style={{ position: "fixed", inset: 0, zIndex: 200, cursor: "pointer", overflow: "hidden",
           background: "linear-gradient(180deg,#0e141c 0%,#141c26 60%,#0a0e13 100%)" }}>
           {/* lobby header */}
           <div style={{ position: "absolute", top: "8%", left: 0, right: 0, textAlign: "center" }}>
@@ -2131,7 +2135,7 @@ Greet Brad now if this is the start.`;
           <div style={{ marginTop: 22, fontSize: 12, color: T.muted, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1 }}>
             {elevatorFloor >= 30 ? "Arriving…" : "Going up…"}
           </div>
-          <button onClick={() => { if (elevAudioRef.current) { try { elevAudioRef.current.pause(); } catch(e){} } setArrivalStage("reception"); }}
+          <button onClick={() => { if (elevAudioRef.current) { try { elevAudioRef.current.pause(); elevAudioRef.current.currentTime = 0; } catch(e){} } setArrivalStage("reception"); }}
             style={{ marginTop: 18, background: "transparent", border: `1px solid ${T.lineSoft}`, color: T.muted, borderRadius: 8, padding: "6px 16px", fontSize: 11, fontFamily: "'JetBrains Mono',monospace", cursor: "pointer", letterSpacing: 1 }}>
             SKIP ▸
           </button>
