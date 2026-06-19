@@ -17,6 +17,7 @@ export default async function handler(req, res) {
     const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
     const text = (body.text || "").slice(0, 800); // safety cap to protect your quota
     const voiceId = body.voiceId || "pNInz6obpgDQGcFmaJgB"; // default (Adam)
+    const tune = body.tune || {};
     if (!text.trim()) return res.status(400).json({ error: "No text" });
 
     const upstream = await fetch(
@@ -31,7 +32,12 @@ export default async function handler(req, res) {
         body: JSON.stringify({
           text,
           model_id: "eleven_multilingual_v2", // higher quality, more natural
-          voice_settings: { stability: 0.45, similarity_boost: 0.85, style: 0.35, use_speaker_boost: true },
+          voice_settings: {
+            stability: typeof tune.stability === "number" ? tune.stability : 0.45,
+            similarity_boost: typeof tune.similarity_boost === "number" ? tune.similarity_boost : 0.85,
+            style: typeof tune.style === "number" ? tune.style : 0.35,
+            use_speaker_boost: true,
+          },
         }),
       }
     );
