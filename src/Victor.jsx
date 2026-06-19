@@ -395,35 +395,15 @@ export default function Victor() {
       if (f >= total) { clearInterval(climb); setTimeout(() => setArrivalStage("reception"), 900); }
     }, step);
 
-    // synthesized elevator muzak (gentle major-key arpeggio loop), only while riding
+    // play the real elevator music file (looped through the ride)
     let stopMusic = () => {};
     try {
-      const AC = window.AudioContext || window.webkitAudioContext;
-      if (AC) {
-        const ctx = new AC();
-        const master = ctx.createGain(); master.gain.value = 0.10; master.connect(ctx.destination);
-        // soft pad
-        const notes = [261.63, 329.63, 392.0, 523.25, 392.0, 329.63]; // C E G C G E
-        let i = 0; let alive = true;
-        const playNote = () => {
-          if (!alive) return;
-          const o = ctx.createOscillator(); const g = ctx.createGain();
-          o.type = "sine"; o.frequency.value = notes[i % notes.length];
-          const t = ctx.currentTime;
-          g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.5, t + 0.08); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.7);
-          // gentle vibraphone-ish second harmonic
-          const o2 = ctx.createOscillator(); const g2 = ctx.createGain();
-          o2.type = "triangle"; o2.frequency.value = notes[i % notes.length] * 2;
-          g2.gain.setValueAtTime(0.0001, t); g2.gain.linearRampToValueAtTime(0.15, t + 0.08); g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
-          o.connect(g); g.connect(master); o2.connect(g2); g2.connect(master);
-          o.start(t); o.stop(t + 0.75); o2.start(t); o2.stop(t + 0.65);
-          i++;
-        };
-        const musicInt = setInterval(playNote, 600);
-        playNote();
-        elevAudioRef.current = ctx;
-        stopMusic = () => { alive = false; clearInterval(musicInt); try { ctx.close(); } catch(e){} };
-      }
+      const audio = new Audio("/elevator.mp3");
+      audio.loop = true;
+      audio.volume = 0.5;
+      audio.play().catch(() => {}); // may be blocked until a user gesture; the tap-to-enter covers this
+      elevAudioRef.current = audio;
+      stopMusic = () => { try { audio.pause(); audio.currentTime = 0; } catch(e){} };
     } catch(e) {}
 
     return () => { clearInterval(climb); stopMusic(); };
@@ -2137,7 +2117,7 @@ Greet Brad now if this is the start.`;
           <div style={{ marginTop: 22, fontSize: 12, color: T.muted, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1 }}>
             {elevatorFloor >= 30 ? "Arriving…" : "Going up…"}
           </div>
-          <button onClick={() => { if (elevAudioRef.current) { try { elevAudioRef.current.close(); } catch(e){} } setArrivalStage("reception"); }}
+          <button onClick={() => { if (elevAudioRef.current) { try { elevAudioRef.current.pause(); } catch(e){} } setArrivalStage("reception"); }}
             style={{ marginTop: 18, background: "transparent", border: `1px solid ${T.lineSoft}`, color: T.muted, borderRadius: 8, padding: "6px 16px", fontSize: 11, fontFamily: "'JetBrains Mono',monospace", cursor: "pointer", letterSpacing: 1 }}>
             SKIP ▸
           </button>
@@ -2145,25 +2125,37 @@ Greet Brad now if this is the start.`;
       )}
 
       {arrivalStage === "reception" && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "linear-gradient(180deg,#0c1220,#0a0e13,#070a0e)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 20, overflowY: "auto" }}>
+        <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "linear-gradient(180deg,#1a2740,#16243a,#0e141c)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start", padding: "24px 20px", overflowY: "auto" }}>
           {/* === LOBBY ENVIRONMENT (backdrop) === */}
           <div style={{ position: "absolute", inset: 0, zIndex: 0, overflow: "hidden", pointerEvents: "none" }}>
-            {/* window wall with dusk city view */}
-            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "46%", background: "linear-gradient(180deg,#16243a,#243044)", display: "flex" }}>
-              {[...Array(8)].map((_,i) => <div key={i} style={{ flex: 1, borderRight: "2px solid rgba(10,16,24,0.7)", background: "linear-gradient(180deg,rgba(230,150,90,0.10),transparent 50%)" }} />)}
-              {/* distant lit buildings */}
-              <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "40%", display: "flex", alignItems: "flex-end", gap: 8, paddingLeft: 24, opacity: 0.5 }}>
-                {[50,75,60,85,55,70].map((h,i) => <div key={i} style={{ width: 26, height: `${h}%`, background: "#0e1622" }} />)}
+            {/* window wall with dusk city view (the lobby's back wall) */}
+            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "58%", background: "linear-gradient(180deg,#2a3a55 0%,#3a4a68 30%,#5a5570 55%,#7a6a78 75%)", display: "flex" }}>
+              {/* sunset glow */}
+              <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at 75% 95%, rgba(240,160,95,0.5), transparent 55%)" }} />
+              {/* distant lit city skyline */}
+              <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "55%", display: "flex", alignItems: "flex-end", gap: 6, paddingLeft: 18, opacity: 0.85 }}>
+                {[45,68,52,80,58,72,48,64,55].map((h,i) => (
+                  <div key={i} style={{ width: 24, height: `${h}%`, background: "linear-gradient(180deg,#1a2436,#0c1420)", position: "relative" }}>
+                    {/* lit windows on distant buildings */}
+                    {[...Array(6)].map((_,j) => <div key={j} style={{ position: "absolute", left: 4 + (j%2)*8, top: 8 + Math.floor(j/2)*12, width: 4, height: 4, background: Math.random()>0.4 ? "rgba(255,220,150,0.7)" : "transparent" }} />)}
+                  </div>
+                ))}
+              </div>
+              {/* window mullions (frame bars) in front of the view */}
+              <div style={{ position: "absolute", inset: 0, display: "flex", pointerEvents: "none" }}>
+                {[...Array(7)].map((_,i) => <div key={i} style={{ flex: 1, borderRight: "3px solid rgba(12,18,28,0.85)" }} />)}
               </div>
             </div>
             {/* floor */}
             <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "56%", background: "linear-gradient(180deg,#141c28,#0a0e13)", boxShadow: "inset 0 10px 40px rgba(0,0,0,0.6)" }} />
-            {/* reception desk */}
-            <div style={{ position: "absolute", bottom: "8%", left: "50%", transform: "translateX(-50%)", width: 360, maxWidth: "82%", height: 90, background: "linear-gradient(180deg,#2a3444,#1a2230)", backgroundImage: "linear-gradient(180deg,#2a3444,#1a2230)", borderRadius: "10px 10px 4px 4px", boxShadow: "0 12px 30px rgba(0,0,0,0.5)", border: `1px solid ${T.cyan}22` }}>
-              <div style={{ position: "absolute", top: 10, left: "50%", transform: "translateX(-50%)", display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ fontSize: 12 }}>🍁</span>
-                <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 8, letterSpacing: 2, color: T.cyan, opacity: 0.7 }}>AURORA HORIZON</span>
+            {/* reception desk (front and center) */}
+            <div style={{ position: "absolute", bottom: "6%", left: "50%", transform: "translateX(-50%)", width: 420, maxWidth: "88%", height: 110, background: "linear-gradient(180deg,#3a4456,#222b3a)", borderRadius: "12px 12px 6px 6px", boxShadow: "0 16px 40px rgba(0,0,0,0.6)", border: `1px solid ${T.cyan}33` }}>
+              <div style={{ position: "absolute", top: 14, left: "50%", transform: "translateX(-50%)", display: "flex", alignItems: "center", gap: 7, whiteSpace: "nowrap" }}>
+                <span style={{ fontSize: 15 }}>🍁</span>
+                <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, letterSpacing: 2, color: T.cyan, opacity: 0.85 }}>AURORA HORIZON DIGITAL</span>
               </div>
+              {/* desk front panel light strip */}
+              <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg,transparent,${T.cyan}66,transparent)` }} />
             </div>
             {/* plants flanking */}
             <div style={{ position: "absolute", bottom: "10%", left: "14%", fontSize: 32 }}>🪴</div>
