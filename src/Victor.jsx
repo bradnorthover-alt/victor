@@ -406,6 +406,7 @@ export default function Victor() {
   const [voiceOn, setVoiceOn] = useState(false);
   const [realVoice, setRealVoice] = useState(false); // ElevenLabs real voices
   const [announceNames, setAnnounceNames] = useState(true); // narrator announces each speaker by name
+  const meetingKindRef = useRef("full"); // full | oneonone | huddle
   const audioElRef = useRef(null);
   const [view, setView] = useState("console"); // console | boardroom
   // ===== ARRIVAL FLOW (elevator -> reception -> office) =====
@@ -474,7 +475,7 @@ export default function Victor() {
     const climb = setInterval(() => {
       f += 1;
       setElevatorFloor(f);
-      if (f >= total) { clearInterval(climb); narrateScene("The doors open onto the thirtieth floor."); setTimeout(() => setArrivalStage("reception"), 900); }
+      if (f >= total) { clearInterval(climb); narrateScene(["The doors open onto the thirtieth floor.", "Thirty floors up, the doors slide apart.", "The elevator settles, and the doors part."]); setTimeout(() => setArrivalStage("reception"), 900); }
     }, step);
 
     // music is started by the elevator tap; this effect only ensures it stops when the ride ends
@@ -698,7 +699,7 @@ export default function Victor() {
     theo:     { stability: 0.36, similarity_boost: 0.85, style: 0.46, speed: 0.98 }, // casual, easy
     guest:    { stability: 0.42, similarity_boost: 0.8,  style: 0.35, speed: 0.98 },
     vivian:   { stability: 0.42, similarity_boost: 0.85, style: 0.5,  speed: 0.98 }, // warm, welcoming
-    narrator: { stability: 0.6,  similarity_boost: 0.75, style: 0.12, speed: 0.96 }, // even, unhurried
+    narrator: { stability: 0.78, similarity_boost: 0.85, style: 0.0,  speed: 0.88 }, // George: deep, cinematic, slow & weighty
   };
   const VOICE_IDS = {
     victor: "onwK4e9ZLuTAKqWW03F9",   // Daniel — authoritative male
@@ -709,7 +710,7 @@ export default function Victor() {
     theo: "bIHbv24MWmeRgasZH58o",     // Will — casual, friendly male (premium)
     guest: "cjVigY5qzO86Huf0OWal",    // Eric — neutral male (premium)
     vivian: "pFZP5JQG7iQjIQuC4Bku",   // Lily — warm, friendly receptionist
-    narrator: "onwK4e9ZLuTAKqWW03F9", // Daniel — calm narrator for stage directions
+    narrator: "JBFqnCBsd6RMkjVDRZzb", // George — deep, cinematic movie-trailer narrator (distinct from cast)
   };
 
   // Shape voice settings by the emotional mood of the line (emotion in delivery).
@@ -815,15 +816,30 @@ export default function Victor() {
     }
   }, [speakRealAwait, realVoice]);
 
-  // Announce a speaker by name in the narrator voice, then speak their turn.
+  // Announce a speaker via the narrator, smartly: only on a real floor-change, varied phrasing,
+  // role sometimes, and never the same person back-to-back. Skipped in quick huddles.
   const lastAnnouncedRef = useRef(null);
+  const announceCountRef = useRef(0);
   const speakTurnAnnounced = useCallback(async (who, rawText, force) => {
     const NAMES = { victor: "Victor", margaret: "Margaret", ronda: "Ronda", priya: "Priya", desmond: "Desmond", theo: "Theo", guest: "Guest", vivian: "Vivian" };
+    const ROLES = { victor: "the CEO", margaret: "Finance", ronda: "Operations", priya: "Growth", desmond: "Legal", theo: "Product", guest: "our guest" };
     const name = NAMES[who];
-    // only announce when the speaker changes (don't repeat the same name back to back)
-    if (announceNames && name && lastAnnouncedRef.current !== who) {
+    const isFloorChange = lastAnnouncedRef.current !== who; // speaker actually changed = the floor moved
+    const skipForMode = meetingKindRef.current === "huddle" || meetingKindRef.current === "oneonone";
+    if (announceNames && name && isFloorChange && !skipForMode) {
       lastAnnouncedRef.current = who;
-      await speakRealAwait("narrator", name + ".", true);
+      const n = announceCountRef.current++;
+      // varied, natural announcement forms (rotate so it never sounds robotic)
+      const forms = [
+        name + ".",
+        "Over to " + name + ".",
+        name + " weighs in.",
+        name + ", go ahead.",
+        ROLES[who] ? (ROLES[who].charAt(0).toUpperCase() + ROLES[who].slice(1) + ".") : (name + "."),
+        name + " takes the floor.",
+      ];
+      const line = forms[n % forms.length];
+      await speakRealAwait("narrator", line, true);
     }
     await speakTurn(who, rawText, force);
   }, [speakTurn, speakRealAwait, announceNames]);
@@ -1052,9 +1068,20 @@ Greet ${arriving} now if this is the start.`;
     } catch(e){}
   }
 
-  // Narrate a scene transition in the narrator voice (spoken, forced so it plays regardless of toggle).
-  function narrateScene(line) {
-    try { speakRealAwait("narrator", line, true); } catch(e){}
+  // Narrate a scene transition in the narrator voice. Accepts a string or an array of variants (one is chosen).
+  function narrateScene(lineOrArr) {
+    try {
+      const line = Array.isArray(lineOrArr) ? lineOrArr[Math.floor(Math.random() * lineOrArr.length)] : lineOrArr;
+      speakRealAwait("narrator", line, true);
+    } catch(e){}
+  }
+  // Time-of-day flavor for narration.
+  function todPhrase() {
+    const h = new Date().getHours();
+    if (h < 12) return "Morning light fills the lobby.";
+    if (h < 17) return "An afternoon hum runs through the office.";
+    if (h < 21) return "Evening settles over Aurora Horizon.";
+    return "The office is quiet, late into the night.";
   }
 
   // When you click your seat to sit down, settle in briefly, then the meeting begins.
@@ -1065,6 +1092,7 @@ Greet ${arriving} now if this is the start.`;
   }
 
   function callMeeting(opts = {}) {
+    meetingKindRef.current = opts.kind || "full";
     setView("boardroom");
     setMeetingLive(true);
     setRealVoice(true); // ensure the cast speaks aloud in meetings
@@ -2003,6 +2031,7 @@ Greet ${arriving} now if this is the start.`;
                   else {
                     setSummoned(s => [...s, a.id]);
                     playOfficeSound("door"); // door opens as they enter
+                    narrateScene(`${a.name} enters and takes a seat.`);
                     if (!loading) callVictor(`Bring ${a.name} (${a.role}) into the room. Introduce them in one line and have them give their first read on what's on the table, in their voice. Mark it [${a.name}].`, { noTags: true });
                   }
                 }}>
@@ -2076,7 +2105,7 @@ Greet ${arriving} now if this is the start.`;
                 const c = SPEAKER_COLORS[spoken.who] || T.cyan;
                 const nm = spoken.who.charAt(0).toUpperCase() + spoken.who.slice(1);
                 return (
-                  <div style={{ position: "absolute", top: 14, left: 12, width: "46%", maxWidth: 300, background: "rgba(9,14,20,0.96)", border: `1px solid ${c}77`, borderRadius: 10, padding: 12, boxShadow: `0 0 28px rgba(0,0,0,0.6)`, zIndex: 5 }}>
+                  <div key={spoken.who} style={{ position: "absolute", top: 14, left: 12, width: "46%", maxWidth: 300, background: "rgba(9,14,20,0.96)", border: `1px solid ${c}77`, borderRadius: 10, padding: 12, boxShadow: `0 0 28px rgba(0,0,0,0.6)`, zIndex: 5, animation: "speakerIn .35s ease-out" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
                       <Avatar who={spoken.who} size={44} talking={true} mood={spoken.mood} />
                       <div>
@@ -2490,9 +2519,9 @@ Greet ${arriving} now if this is the start.`;
           <div style={{ position: "absolute", bottom: "6%", left: 0, right: 0, textAlign: "center" }}>
             <div style={{ color: "#fff", opacity: 0.85, fontSize: 12, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 2, marginBottom: 12 }}>WHO'S ARRIVING?</div>
             <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
-              <button onClick={() => { setMyName("Brad"); setMyRole("brad"); localStorage.setItem("victor_name","Brad"); unlockAudio(); narrateScene("Brad arrives at Aurora Horizon Digital."); setArrivalStage("lobby"); }}
+              <button onClick={() => { setMyName("Brad"); setMyRole("brad"); localStorage.setItem("victor_name","Brad"); unlockAudio(); narrateScene("Brad arrives at Aurora Horizon Digital. " + todPhrase()); setArrivalStage("lobby"); }}
                 style={{ background: `${T.green}22`, border: `1.5px solid ${T.green}`, color: T.green, borderRadius: 10, padding: "12px 26px", fontSize: 14, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, cursor: "pointer" }}>BRAD</button>
-              <button onClick={() => { setMyName("Jonathan"); setMyRole("jonathan"); localStorage.setItem("victor_name","Jonathan"); unlockAudio(); narrateScene("Jonathan arrives at Aurora Horizon Digital."); setArrivalStage("lobby"); }}
+              <button onClick={() => { setMyName("Jonathan"); setMyRole("jonathan"); localStorage.setItem("victor_name","Jonathan"); unlockAudio(); narrateScene("Jonathan arrives at Aurora Horizon Digital. " + todPhrase()); setArrivalStage("lobby"); }}
                 style={{ background: `${T.amber}22`, border: `1.5px solid ${T.amber}`, color: T.amber, borderRadius: 10, padding: "12px 26px", fontSize: 14, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, cursor: "pointer" }}>JONATHAN</button>
             </div>
           </div>
@@ -2538,7 +2567,7 @@ Greet ${arriving} now if this is the start.`;
                 // beep on swipe
                 try { const AC = window.AudioContext||window.webkitAudioContext; if(AC){ const c=new AC(); const o=c.createOscillator(); const g=c.createGain(); o.type="square"; o.frequency.value=880; g.gain.setValueAtTime(0.05,c.currentTime); g.gain.exponentialRampToValueAtTime(0.0001,c.currentTime+0.18); o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime+0.2);} } catch(e){}
                 // after doors open, start the ride
-                narrateScene("You step into the elevator."); setTimeout(() => { startElevatorMusic(); unlockVoice(); setArrivalStage("elevator"); }, 1300);
+                narrateScene(["You step into the elevator.", "The doors close, and you begin to rise.", "Into the elevator \u2014 going up."]); setTimeout(() => { startElevatorMusic(); unlockVoice(); setArrivalStage("elevator"); }, 1300);
               }}
               style={{ position: "absolute", bottom: "16%", left: "50%", transform: "translateX(-50%)", width: 150, height: 94, borderRadius: 10, border: "none", cursor: "pointer", padding: 0, animation: "cardBob 1.8s ease-in-out infinite",
                 background: `linear-gradient(135deg, ${myRole === "jonathan" ? "#caa14a" : "#3a8a5e"}, #1a2230)`, boxShadow: "0 8px 22px rgba(0,0,0,0.5)", overflow: "hidden", textAlign: "left" }}>
@@ -2694,7 +2723,12 @@ Greet ${arriving} now if this is the start.`;
           </div>
 
           {/* go in */}
-          <button onClick={() => { narrateScene("You enter the boardroom. The team is waiting."); setArrivalStage("done"); setView("boardroom"); setNeedsSeat(true); }}
+          <button onClick={() => {
+                const present = ["Victor", "Margaret", "Ronda", ...summoned.map(id => ({ marketing: "Priya", legal: "Desmond", product: "Theo", guest: "your guest" }[id])).filter(Boolean)];
+                const list = present.length > 1 ? present.slice(0, -1).join(", ") + " and " + present[present.length-1] : present[0];
+                narrateScene("You enter the boardroom. " + list + " are waiting at the table.");
+                setArrivalStage("done"); setView("boardroom"); setNeedsSeat(true);
+              }}
             style={{ marginTop: 20, background: `${T.cyan}1E`, border: `1px solid ${T.cyan}`, color: T.cyan, borderRadius: 10, padding: "12px 28px", fontSize: 13, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1.5, cursor: "pointer", position: "relative", zIndex: 1 }}>
             GO IN TO THE BOARDROOM ▸
           </button>
@@ -2723,6 +2757,7 @@ Greet ${arriving} now if this is the start.`;
         *::-webkit-scrollbar{width:8px;height:8px}*::-webkit-scrollbar-thumb{background:${T.line};border-radius:8px}
         textarea:focus,input:focus{outline:none;border-color:${T.cyan}!important}
         @keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+        @keyframes speakerIn { 0% { opacity: 0; transform: translateY(-6px) scale(0.98); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
         @keyframes boardPop { 0% { transform: scale(0.7) rotate(-6deg); opacity: 0; } 60% { transform: scale(1.05) rotate(1deg); } 100% { transform: scale(1) rotate(0deg); opacity: 1; } }
         @keyframes reactNod { 0%,100% { transform: translateY(0); } 50% { transform: translateY(2px); } }
         @keyframes reactLean { 0%,100% { transform: translateX(0) rotate(0deg); } 50% { transform: translateX(-1px) rotate(-2deg); } }
