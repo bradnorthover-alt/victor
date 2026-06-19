@@ -347,6 +347,8 @@ function renderBody(text) {
   });
 }
 
+const APP_VERSION = "v1.8 — arrival flow";
+
 export default function Victor() {
   const [w, setW] = useState(typeof window !== "undefined" ? window.innerWidth : 1200);
   const narrow = w < 920;
@@ -2176,7 +2178,7 @@ Greet Brad now if this is the start.`;
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 10, height: 10, borderRadius: "50%", background: T.cyan, boxShadow: `0 0 12px ${T.cyan}`, animation: loading ? "pulse 1s infinite" : "none" }} />
           <div>
-            <div style={{ fontWeight: 700, letterSpacing: 2, fontSize: 16 }}>VICTOR</div>
+            <div style={{ fontWeight: 700, letterSpacing: 2, fontSize: 16 }}>VICTOR <span style={{ fontSize: 9, color: T.cyan, fontWeight: 400, letterSpacing: 1 }}>{APP_VERSION}</span></div>
             <div style={{ fontSize: 9, color: T.muted, letterSpacing: 2, fontFamily: "'JetBrains Mono',monospace" }}>OFFICE OF THE CEO · AURORA HORIZON DIGITAL</div>
           </div>
         </div>
