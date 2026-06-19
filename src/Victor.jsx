@@ -478,8 +478,6 @@ export default function Victor() {
   const charSpeakingRef = useRef(false); // true while a character voice is playing (mutes mic input)
   const [summoned, setSummoned] = useState([]); // advisor ids currently at the table
   const [creditsUsed, setCreditsUsed] = useState(0); // estimated ElevenLabs credits this session
-  // persist boardroom state
-  useEffect(() => { store.set(K.roomstate, JSON.stringify({ summoned, timeOfDay })); }, [summoned, timeOfDay]);
   // restore saved boardroom state once on load
   useEffect(() => {
     (async () => {
@@ -490,6 +488,8 @@ export default function Victor() {
   }, []);
   const [guestRole, setGuestRole] = useState(""); // optional custom guest descriptor
   const [timeOfDay, setTimeOfDay] = useState("night"); // day | dusk | night
+  // persist boardroom state (must be after timeOfDay is declared)
+  useEffect(() => { store.set(K.roomstate, JSON.stringify({ summoned, timeOfDay })); }, [summoned, timeOfDay]);
   const [clockNow, setClockNow] = useState(new Date());
   useEffect(() => { const t = setInterval(() => setClockNow(new Date()), 1000); return () => clearInterval(t); }, []);
   useEffect(() => { if (!meetingLive || !meetingStart) { setMeetingClock(0); return; } const t = setInterval(() => setMeetingClock(Math.floor((Date.now() - meetingStart) / 1000)), 1000); return () => clearInterval(t); }, [meetingLive, meetingStart]);
