@@ -372,7 +372,7 @@ export default function Victor() {
   const audioElRef = useRef(null);
   const [view, setView] = useState("console"); // console | boardroom
   // ===== ARRIVAL FLOW (elevator -> reception -> office) =====
-  const [arrivalStage, setArrivalStage] = useState("elevator"); // elevator | reception | done
+  const [arrivalStage, setArrivalStage] = useState("exterior"); // exterior | lobby | elevator | reception | done
   const [elevatorFloor, setElevatorFloor] = useState(1);
   const [myDrink, setMyDrink] = useState(""); // drink chosen at reception, shows in boardroom
   const [vivianMsgs, setVivianMsgs] = useState([]); // reception conversation
@@ -2033,6 +2033,75 @@ Greet Brad now if this is the start.`;
 
   return (
     <div style={wrap}>
+      {arrivalStage === "exterior" && (
+        <div onClick={() => setArrivalStage("lobby")} style={{ position: "fixed", inset: 0, zIndex: 200, cursor: "pointer", overflow: "hidden",
+          background: "linear-gradient(180deg,#1a2438 0%,#2d3a52 35%,#4a5570 60%,#6b6680 100%)" }}>
+          {/* dusk sky glow */}
+          <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "55%", background: "radial-gradient(ellipse at 70% 90%, rgba(230,150,90,0.35), transparent 60%)" }} />
+          {/* distant skyline */}
+          <div style={{ position: "absolute", bottom: "32%", left: 0, right: 0, height: "20%", display: "flex", alignItems: "flex-end", gap: 6, opacity: 0.4, paddingLeft: 20 }}>
+            {[40,70,55,90,60,75,50].map((h,i) => <div key={i} style={{ width: 28, height: `${h}%`, background: "#1a2230" }} />)}
+          </div>
+          {/* THE TOWER */}
+          <div style={{ position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", width: 200, height: "78%",
+            background: "linear-gradient(180deg,#2a3550,#1a2230)", borderRadius: "6px 6px 0 0", boxShadow: "0 0 60px rgba(0,0,0,0.5)",
+            backgroundImage: "linear-gradient(180deg,#36425c,#1a2230)" }}>
+            {/* lit windows grid */}
+            <div style={{ position: "absolute", inset: "10px 12px", display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 5 }}>
+              {[...Array(70)].map((_,i) => <div key={i} style={{ height: 10, background: Math.random() > 0.45 ? "rgba(120,200,220,0.55)" : "rgba(20,30,40,0.6)", borderRadius: 1 }} />)}
+            </div>
+            {/* signage with maple leaf */}
+            <div style={{ position: "absolute", top: "42%", left: "50%", transform: "translateX(-50%)", whiteSpace: "nowrap", background: "rgba(9,14,20,0.85)", border: `1px solid ${T.cyan}77`, borderRadius: 6, padding: "5px 10px", display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ fontSize: 13 }}>🍁</span>
+              <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 9, letterSpacing: 1, color: T.cyan }}>AURORA HORIZON</span>
+            </div>
+          </div>
+          {/* Canadian flag at entrance */}
+          <div style={{ position: "absolute", bottom: "8%", left: "calc(50% - 130px)", textAlign: "center" }}>
+            <div style={{ fontSize: 22 }}>🇨🇦</div>
+          </div>
+          {/* title + prompt */}
+          <div style={{ position: "absolute", top: "8%", left: 0, right: 0, textAlign: "center" }}>
+            <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, letterSpacing: 5, color: "#fff", opacity: 0.9 }}>AURORA HORIZON DIGITAL</div>
+            <div style={{ fontSize: 10, color: "#fff", opacity: 0.5, letterSpacing: 2, marginTop: 4 }}>WOODSTOCK, NB</div>
+          </div>
+          <div style={{ position: "absolute", bottom: "4%", left: 0, right: 0, textAlign: "center", color: "#fff", opacity: 0.8, fontSize: 13, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, animation: "pulse 1.6s infinite" }}>
+            ▸ TAP TO ENTER ◂
+          </div>
+        </div>
+      )}
+
+      {arrivalStage === "lobby" && (
+        <div onClick={() => setArrivalStage("elevator")} style={{ position: "fixed", inset: 0, zIndex: 200, cursor: "pointer", overflow: "hidden",
+          background: "linear-gradient(180deg,#0e141c 0%,#141c26 60%,#0a0e13 100%)" }}>
+          {/* lobby header */}
+          <div style={{ position: "absolute", top: "8%", left: 0, right: 0, textAlign: "center" }}>
+            <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, letterSpacing: 4, color: T.muted }}>GROUND FLOOR LOBBY</div>
+            <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13, letterSpacing: 2, color: T.cyan, marginTop: 4 }}>AURORA HORIZON DIGITAL</div>
+          </div>
+          {/* marble floor */}
+          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "40%", background: "linear-gradient(180deg,#1a2430,#0a0e13)", boxShadow: "inset 0 8px 30px rgba(0,0,0,0.5)" }} />
+          {/* reception plant + desk hint */}
+          <div style={{ position: "absolute", bottom: "38%", left: "16%", fontSize: 28 }}>🪴</div>
+          {/* the elevator at the back */}
+          <div style={{ position: "absolute", top: "32%", left: "50%", transform: "translateX(-50%)", width: 120, height: 180, border: `2px solid ${T.cyan}55`, borderRadius: "6px 6px 0 0", background: "linear-gradient(180deg,#10171f,#0a0e13)", boxShadow: `0 0 40px ${T.cyan}22` }}>
+            {/* elevator call light */}
+            <div style={{ position: "absolute", top: -16, left: "50%", transform: "translateX(-50%)", display: "flex", gap: 4, alignItems: "center" }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.cyan, boxShadow: `0 0 8px ${T.cyan}`, animation: "pulse 1s infinite" }} />
+              <span style={{ fontSize: 9, color: T.cyan, fontFamily: "'JetBrains Mono',monospace" }}>▲</span>
+            </div>
+            {/* doors */}
+            <div style={{ position: "absolute", inset: "8px", display: "flex" }}>
+              <div style={{ width: "50%", background: "linear-gradient(90deg,#1c2733,#131b24)", borderRight: `1px solid ${T.cyan}33` }} />
+              <div style={{ width: "50%", background: "linear-gradient(270deg,#1c2733,#131b24)", borderLeft: `1px solid ${T.cyan}33` }} />
+            </div>
+          </div>
+          <div style={{ position: "absolute", bottom: "4%", left: 0, right: 0, textAlign: "center", color: "#fff", opacity: 0.8, fontSize: 13, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, animation: "pulse 1.6s infinite" }}>
+            ▸ TAP THE ELEVATOR ◂
+          </div>
+        </div>
+      )}
+
       {arrivalStage === "elevator" && (
         <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "#06090d", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
           {/* floor indicator */}
