@@ -632,6 +632,27 @@ export default function Victor() {
   }, [voiceOn]);
 
   // Real ElevenLabs voice for a given character turn.
+  const VOICE_TUNE = {
+    victor:   { stability: 0.55, similarity_boost: 0.85, style: 0.25 }, // measured, controlled
+    margaret: { stability: 0.65, similarity_boost: 0.8,  style: 0.15 }, // clipped, precise
+    ronda:    { stability: 0.5,  similarity_boost: 0.85, style: 0.35 }, // warm, easy
+    priya:    { stability: 0.35, similarity_boost: 0.85, style: 0.55 }, // energetic, expressive
+    desmond:  { stability: 0.7,  similarity_boost: 0.8,  style: 0.1  }, // careful, even
+    theo:     { stability: 0.45, similarity_boost: 0.85, style: 0.4  }, // casual
+    guest:    { stability: 0.5,  similarity_boost: 0.8,  style: 0.3  },
+    vivian:   { stability: 0.45, similarity_boost: 0.85, style: 0.45 }, // warm, welcoming
+  };
+  const VOICE_IDS = {
+    victor: "onwK4e9ZLuTAKqWW03F9",   // Daniel — authoritative male
+    margaret: "XB0fDUnXU5powFXDhCwa", // Charlotte — crisp female
+    ronda: "pFZP5JQG7iQjIQuC4Bku",    // Lily — warm female
+    priya: "Xb7hH8MSUJpSbSDYk0k2",    // Alice — bright, expressive female (premium)
+    desmond: "nPczCjzI2devNBz1zQrb",  // Brian — measured, resonant male (premium)
+    theo: "bIHbv24MWmeRgasZH58o",     // Will — casual, friendly male (premium)
+    guest: "cjVigY5qzO86Huf0OWal",    // Eric — neutral male (premium)
+    vivian: "pFZP5JQG7iQjIQuC4Bku",   // Lily — warm, friendly receptionist
+  };
+
   const speakReal = useCallback(async (who, text) => {
     if (!realVoice || !text || !text.trim()) return;
     const voiceId = VOICE_IDS[who] || VOICE_IDS.victor;
@@ -1176,26 +1197,6 @@ Greet Brad now if this is the start.`;
   const NAME_TO_SEAT = { victor: "victor", margaret: "cfo", ronda: "secretary", priya: "marketing", desmond: "legal", theo: "product", guest: "guest" };
   // ElevenLabs preset voice IDs per character (public voices, free-tier friendly)
   // Per-character voice tuning: stability (lower=more expressive), style (higher=more emphatic), speed feel.
-  const VOICE_TUNE = {
-    victor:   { stability: 0.55, similarity_boost: 0.85, style: 0.25 }, // measured, controlled
-    margaret: { stability: 0.65, similarity_boost: 0.8,  style: 0.15 }, // clipped, precise
-    ronda:    { stability: 0.5,  similarity_boost: 0.85, style: 0.35 }, // warm, easy
-    priya:    { stability: 0.35, similarity_boost: 0.85, style: 0.55 }, // energetic, expressive
-    desmond:  { stability: 0.7,  similarity_boost: 0.8,  style: 0.1  }, // careful, even
-    theo:     { stability: 0.45, similarity_boost: 0.85, style: 0.4  }, // casual
-    guest:    { stability: 0.5,  similarity_boost: 0.8,  style: 0.3  },
-    vivian:   { stability: 0.45, similarity_boost: 0.85, style: 0.45 }, // warm, welcoming
-  };
-  const VOICE_IDS = {
-    victor: "onwK4e9ZLuTAKqWW03F9",   // Daniel — authoritative male
-    margaret: "XB0fDUnXU5powFXDhCwa", // Charlotte — crisp female
-    ronda: "pFZP5JQG7iQjIQuC4Bku",    // Lily — warm female
-    priya: "Xb7hH8MSUJpSbSDYk0k2",    // Alice — bright, expressive female (premium)
-    desmond: "nPczCjzI2devNBz1zQrb",  // Brian — measured, resonant male (premium)
-    theo: "bIHbv24MWmeRgasZH58o",     // Will — casual, friendly male (premium)
-    guest: "cjVigY5qzO86Huf0OWal",    // Eric — neutral male (premium)
-    vivian: "pFZP5JQG7iQjIQuC4Bku",   // Lily — warm, friendly receptionist
-  };
 
   function stripStage(s) {
     // remove *[...]* and standalone [phrase] stage directions and surrounding asterisks
