@@ -645,8 +645,8 @@ export default function Victor() {
     vivian: "pFZP5JQG7iQjIQuC4Bku",   // Lily — warm, friendly receptionist
   };
 
-  const speakReal = useCallback(async (who, text) => {
-    if (!realVoice || !text || !text.trim()) return;
+  const speakReal = useCallback(async (who, text, force) => {
+    if ((!realVoice && !force) || !text || !text.trim()) return;
     const voiceId = VOICE_IDS[who] || VOICE_IDS.victor;
     setCreditsUsed(c => c + Math.min(500, text.length)); // estimate: ~1 credit/char
     let tune = { ...(VOICE_TUNE[who] || VOICE_TUNE.victor) };
@@ -728,7 +728,7 @@ Greet Brad now if this is the start.`;
       raw = raw.replace(/<<<DRINK:[^>]*>>>/g, "").trim();
       const out = [...next, { role: "assistant", content: raw }];
       setVivianMsgs(out);
-      speakReal("vivian", raw);
+      speakReal("vivian", raw, true);
     } catch (e) {
       setVivianMsgs(prev => [...prev, { role: "assistant", content: "Welcome to Aurora Horizon! Go right in — they're expecting you." }]);
     }
