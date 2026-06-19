@@ -119,8 +119,15 @@ SUMMONABLE ADVISORS (NOT at the table unless Brad summons them or you call them 
 When a topic clearly needs one of them and they're present (you'll be told who is "at the table"), bring them in by name with [Priya]/[Desmond]/[Theo]/[Guest] turns. If a topic needs someone who is NOT present, say so and suggest Brad summon them \u2014 do not speak for an advisor who hasn't been called in.
 
 CHARACTER DEPTH \u2014 make each voice feel like a distinct, real person (AI cast only; never apply to Brad or Jonathan):
-- DISTINCT SPEECH PATTERNS: Each has a recognizable cadence.
-  \u2022 Victor: measured, complete sentences; strategic framing; dry wit.
+- SPEAK DIRECTLY AND BRIEFLY (applies to everyone): Get to the point fast. Lead with the answer or the key point, then one line of why. No throat-clearing, no preamble, no over-formality, no corporate filler. Short, natural, conversational sentences \u2014 the way sharp people actually talk in a fast meeting. Each [Name] turn is usually 1\u20133 sentences. If you have more to say, make it punchy, not long-winded. Never pad.
+- CONVERSATION FLOW \u2014 make it a real back-and-forth, not parallel speeches:
+  \u2022 REACT TO EACH OTHER BY NAME: Characters build on or push against what the previous speaker just said, naming them. ("Margaret's right about the cash, but\u2014", "That's the opposite of what Theo just said.") Don't ignore each other.
+  \u2022 QUICK INTERJECTIONS: Use short reactions to break the rhythm \u2014 a one-word agree or pushback as its own turn ("[Margaret] Agreed.", "[Desmond] No.", "[Priya] Exactly\u2014"). Not every turn is a full point.
+  \u2022 VARY TURN LENGTH: Mix it up like a real meeting \u2014 some turns are a single word or quick reaction, others are a fuller point. Never have everyone give equal-length mini-speeches.
+  \u2022 OPENING CUE WORDS: When a turn is a reaction to the previous speaker, open it with a natural connective \u2014 "Right\u2014", "Hold on\u2014", "Okay, but\u2014", "Sure, except\u2014", "Exactly\u2014", "See, that\u2019s the thing\u2014" \u2014 so it lands like a live response, mid-conversation, not a fresh statement. Most reactive turns should start this way.
+  \u2022 EMOTIONAL MOMENTUM: Carry the room\u2019s energy forward. If the last line was tense, the next person feels it; if it was a win, the mood lifts. Don\u2019t reset to neutral every turn.
+- DISTINCT SPEECH PATTERNS: Each has a recognizable cadence (but always direct and brief).
+  \u2022 Victor: decisive and crisp; frames the call, then commits. Confident, a little dry. Not slow or ponderous \u2014 he moves fast and gets to the decision.
   \u2022 Margaret: clipped, precise, numbers-first; short declaratives; "The number is X. That's the answer."
   \u2022 Ronda: warm, grounding, practical; references people and follow-through; "Let's not lose the thread here."
   \u2022 Priya: energetic, momentum-driven; talks channels, funnels, traction; "Here's the wedge."
@@ -383,6 +390,7 @@ export default function Victor() {
   const [cardSwiped, setCardSwiped] = useState(false); // ID card swipe at the lift
   const [usualDrink, setUsualDrink] = useState(""); // remembered favorite
   const elevAudioRef = useRef(null);
+  const voiceCacheRef = useRef({}); // text-key -> blob object URL (pre-fetched audio)
   // Prime the elevator audio on a user gesture so the browser allows it to play later.
   // Just unlock the voice channel (call inside a click gesture).
   function unlockVoice() {
@@ -627,15 +635,15 @@ export default function Victor() {
 
   // Real ElevenLabs voice for a given character turn.
   const VOICE_TUNE = {
-    victor:   { stability: 0.55, similarity_boost: 0.85, style: 0.25 }, // measured, controlled
-    margaret: { stability: 0.65, similarity_boost: 0.8,  style: 0.15 }, // clipped, precise
-    ronda:    { stability: 0.5,  similarity_boost: 0.85, style: 0.35 }, // warm, easy
-    priya:    { stability: 0.35, similarity_boost: 0.85, style: 0.55 }, // energetic, expressive
-    desmond:  { stability: 0.7,  similarity_boost: 0.8,  style: 0.1  }, // careful, even
-    theo:     { stability: 0.45, similarity_boost: 0.85, style: 0.4  }, // casual
-    guest:    { stability: 0.5,  similarity_boost: 0.8,  style: 0.3  },
-    vivian:   { stability: 0.45, similarity_boost: 0.85, style: 0.45 }, // warm, welcoming
-    narrator: { stability: 0.7,  similarity_boost: 0.75, style: 0.1  }, // even, understated
+    victor:   { stability: 0.42, similarity_boost: 0.82, style: 0.32, speed: 1.07 }, // decisive, a touch of weight, still brisk
+    margaret: { stability: 0.48, similarity_boost: 0.8,  style: 0.18, speed: 1.14 }, // clipped, precise, fastest/sharpest
+    ronda:    { stability: 0.4,  similarity_boost: 0.85, style: 0.42, speed: 1.05 }, // warm, unhurried-friendly
+    priya:    { stability: 0.28, similarity_boost: 0.85, style: 0.58, speed: 1.15 }, // energetic, quickest
+    desmond:  { stability: 0.55, similarity_boost: 0.8,  style: 0.18, speed: 0.98 }, // careful, the most deliberate (but not draggy)
+    theo:     { stability: 0.34, similarity_boost: 0.85, style: 0.46, speed: 1.1  }, // casual, easy
+    guest:    { stability: 0.4,  similarity_boost: 0.8,  style: 0.35, speed: 1.08 },
+    vivian:   { stability: 0.4,  similarity_boost: 0.85, style: 0.52, speed: 1.05 }, // warm, welcoming
+    narrator: { stability: 0.62, similarity_boost: 0.75, style: 0.12, speed: 1.04 }, // even, understated
   };
   const VOICE_IDS = {
     victor: "onwK4e9ZLuTAKqWW03F9",   // Daniel — authoritative male
@@ -684,32 +692,47 @@ export default function Victor() {
   }, [realVoice, mode, messages]);
 
   // Awaitable single-voice speak: resolves when that audio clip finishes (so segments play in order).
+  // Fetch a voice clip's audio (no playback) and cache it, so the next turn can play instantly.
+  const fetchVoiceClip = useCallback(async (who, text) => {
+    if (!text || !text.trim()) return null;
+    const key = who + "|" + text.slice(0, 120);
+    if (voiceCacheRef.current[key]) return voiceCacheRef.current[key];
+    const voiceId = VOICE_IDS[who] || VOICE_IDS.victor;
+    let tune = { ...(VOICE_TUNE[who] || VOICE_TUNE.victor) };
+    const lastMsgMode = [...messages].reverse().find(m => m.mode)?.mode;
+    const inCrisis = mode === "C" || (mode === "auto" && lastMsgMode === "C");
+    if (inCrisis) { tune.stability = Math.min(0.85, tune.stability + 0.2); tune.style = Math.max(0, tune.style - 0.15); }
+    try {
+      const res = await fetch("/api/voice", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: text.slice(0, 500), voiceId, tune }) });
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      if (!blob || blob.size < 200) return null;
+      const url = URL.createObjectURL(blob);
+      voiceCacheRef.current[key] = url;
+      return url;
+    } catch (e) { return null; }
+  }, [mode, messages]);
+
   const speakRealAwait = useCallback((who, text, force) => {
     return new Promise(async (resolve) => {
       if ((!realVoice && !force) || !text || !text.trim()) { resolve(); return; }
-      const voiceId = VOICE_IDS[who] || VOICE_IDS.victor;
-      setCreditsUsed(c => c + Math.min(500, text.length));
-      let tune = { ...(VOICE_TUNE[who] || VOICE_TUNE.victor) };
-      const lastMsgMode = [...messages].reverse().find(m => m.mode)?.mode;
-      const inCrisis = mode === "C" || (mode === "auto" && lastMsgMode === "C");
-      if (inCrisis) { tune.stability = Math.min(0.85, tune.stability + 0.2); tune.style = Math.max(0, tune.style - 0.15); }
+      const key = who + "|" + text.slice(0, 120);
       try {
         if (audioElRef.current) { try { audioElRef.current.pause(); } catch(e){} audioElRef.current = null; }
-        const res = await fetch("/api/voice", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: text.slice(0, 500), voiceId, tune }) });
-        if (!res.ok) { resolve(); return; }
-        const blob = await res.blob();
-        if (!blob || blob.size < 200) { resolve(); return; }
-        const url = URL.createObjectURL(blob);
+        // use pre-fetched audio if available; else fetch now (and count credits)
+        let url = voiceCacheRef.current[key];
+        if (!url) { setCreditsUsed(c => c + Math.min(500, text.length)); url = await fetchVoiceClip(who, text); }
+        if (!url) { resolve(); return; }
         const audio = new Audio(url);
         audioElRef.current = audio;
         charSpeakingRef.current = true; setCharTalking(true);
-        const done = () => { URL.revokeObjectURL(url); charSpeakingRef.current = false; setCharTalking(false); resolve(); };
+        const done = () => { charSpeakingRef.current = false; setCharTalking(false); delete voiceCacheRef.current[key]; try { URL.revokeObjectURL(url); } catch(e){} resolve(); };
         audio.onended = done;
         audio.onerror = done;
         audio.play().catch(() => { done(); });
       } catch (e) { resolve(); }
     });
-  }, [realVoice, mode, messages]);
+  }, [realVoice, mode, messages, fetchVoiceClip]);
 
   // Speak a turn with stage directions narrated separately from the character's dialogue.
   const speakTurn = useCallback(async (who, rawText, force) => {
@@ -1318,24 +1341,43 @@ Greet ${arriving} now if this is the start.`;
     // eslint-disable-next-line
   }, [lastVictorMsg]);
 
-  // Advance through turns, each lit for a duration scaled to its length.
+  // Advance through turns — driven by when the voice actually finishes (tight, smooth, no dead gaps).
   useEffect(() => {
     if (playIdx < 0 || playIdx >= turns.length) return;
+    let cancelled = false;
     const said = turns[playIdx].said;
-    // speak this turn — dialogue in the character's voice, stage directions in the narrator voice
-    speakTurn(turns[playIdx].who, turns[playIdx].raw || said);
-    // duration: ~45ms/char, clamped 1.6s–7s
-    const dur = Math.max(1600, Math.min(7000, said.length * 45));
-    // type the caption out
+    // type the caption out at a snappy pace (independent of audio so words appear as spoken)
+    const dur = Math.max(1000, Math.min(5500, said.length * 30));
     setCaption("");
     let i = 0;
-    const typeSpeed = Math.max(12, Math.min(40, dur / Math.max(said.length, 1)));
+    const typeSpeed = Math.max(8, Math.min(22, dur / Math.max(said.length, 1)));
     const typer = setInterval(() => { i++; setCaption(said.slice(0, i)); if (i >= said.length) clearInterval(typer); }, typeSpeed);
-    const next = setTimeout(() => {
-      if (playIdx + 1 < turns.length) setPlayIdx(playIdx + 1);
-      else setPlayIdx(-1); // done — room goes calm
-    }, dur);
-    return () => { clearInterval(typer); clearTimeout(next); };
+
+    // speak the turn; when its audio fully finishes, move to the next turn after a tiny natural beat
+    let advanceTimer = null;
+    const advance = () => {
+      if (cancelled) return;
+      advanceTimer = setTimeout(() => {
+        if (cancelled) return;
+        if (playIdx + 1 < turns.length) setPlayIdx(playIdx + 1);
+        else setPlayIdx(-1);
+      }, 220); // small gap between speakers = natural turn-taking, not dead air
+    };
+    // PRE-LOAD: while this turn plays, fetch the next turn's audio so it starts with no gap.
+    if (playIdx + 1 < turns.length) {
+      const nxt = turns[playIdx + 1];
+      const nxtText = stripStage(nxt.raw || nxt.said || "");
+      if (nxtText) { fetchVoiceClip(nxt.who, nxtText); } // fire-and-forget; caches the blob
+    }
+    // speakTurn resolves when all its segments finish playing
+    Promise.resolve(speakTurn(turns[playIdx].who, turns[playIdx].raw || said)).then(advance).catch(() => {
+      // if voice fails/off, fall back to the text duration so playback still progresses
+      if (!cancelled) advanceTimer = setTimeout(advance, dur);
+    });
+    // safety net: if audio never resolves (blocked), advance on the text duration + buffer
+    const safety = setTimeout(() => { if (!cancelled && playIdx < turns.length) advance(); }, dur + 8000);
+
+    return () => { cancelled = true; clearInterval(typer); if (advanceTimer) clearTimeout(advanceTimer); clearTimeout(safety); };
     // eslint-disable-next-line
   }, [playIdx, turns]);
 
