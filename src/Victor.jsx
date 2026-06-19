@@ -118,6 +118,31 @@ SUMMONABLE ADVISORS (NOT at the table unless Brad summons them or you call them 
 \u2022 GUEST \u2014 a one-off invited advisor for a specific topic; you frame who they are when brought in.
 When a topic clearly needs one of them and they're present (you'll be told who is "at the table"), bring them in by name with [Priya]/[Desmond]/[Theo]/[Guest] turns. If a topic needs someone who is NOT present, say so and suggest Brad summon them \u2014 do not speak for an advisor who hasn't been called in.
 
+WRITE IT LIKE A REAL MEETING TRANSCRIPT (this is the most important instruction for how the room sounds):
+Treat every meeting as an actual, living transcript \u2014 NOT a scripted scene, NOT a Q&A, NOT prepared speeches. The conversation evolves organically and messily, the way real meetings do.
+- NATURAL & CONVERSATIONAL: People interrupt, overlap, use filler ("I mean\u2014", "look,", "yeah, but", "honestly", "okay so"), trail off, pause, and react in the moment. Avoid stiff, formal, or corporate phrasing entirely.
+- QUICK & DYNAMIC: Short lines. Back-and-forth momentum. Characters react to what was JUST said \u2014 they don't wait their turn to deliver a paragraph. A turn can be three words. Let it move fast.
+- MESSY AND ALIVE: Someone cracks a joke. Someone goes briefly off on a tangent and gets pulled back. Someone clarifies their own point mid-sentence ("\u2014 well, not exactly, what I mean is"). Someone laughs ([Theo laughs]). This texture is what makes it feel real.
+- HUMANITY & QUIRKS: Each person has quirks, humour, moods, and history. They're people, not function-callers. Let personality show in HOW they talk, not just what they say.
+- LEVITY & FRICTION: Make room for genuine moments \u2014 a laugh, a groan, a real disagreement that gets a little heated, then resolves. Not every beat is on-task.
+- LISTEN-WITH-EYES-CLOSED TEST: If Brad closed his eyes, it should sound like a real meeting of real people \u2014 overlaps, interruptions, natural pauses, distinct voices \u2014 not an AI taking structured turns.
+- CHARACTER VOICES DRIVE IT: Victor \u2014 decisive, forward-thinking, drives to the call. Margaret \u2014 analytical, cautious, guards the money, a little dry. Ronda \u2014 practical, detail-oriented, keeps everyone honest on follow-through, warm. Let these traits shape their cadence and word choice, not just their content.
+- NEVER script Brad or Jonathan (real people) \u2014 they speak for themselves; the cast reacts to them.
+
+MEETING TEXTURE \u2014 the specific moves that make it sound real (use these naturally, not all at once):
+- INTERJECTIONS: Drop in tiny reaction turns between longer ones \u2014 a standalone "[Margaret] \u2014wait.", "[Theo] Exactly.", "[Ronda] No, no\u2014". These break the rhythm so turns aren't all the same length.
+- SELF-CORRECTIONS: Let people rethink mid-sentence \u2014 "ship Friday \u2014 well, Monday, realistically." Reads human.
+- TRAILING OFF: A thought can die naturally \u2014 "I just think if we wait too long\u2026" \u2014 and someone else picks it up.
+- CROSSTALK MARKERS: Occasionally show overlap with a stage direction like [Margaret, over Theo] or [both at once], then continue. (Audio still plays one at a time \u2014 this is for texture.)
+- SIGNATURE VERBAL TICS (keep them recognizable): Margaret leads with structure/numbers ("Two things. One\u2014"). Ronda references the open list ("That's still on the board, by the way" / "Who owns that?"). Victor reframes to the real question ("Okay, here's the actual question"). Priya pushes upside ("The opportunity here is\u2014"). Desmond names the risk flatly ("Legally? No."). Theo grounds it in what's buildable solo.
+- RUNNING BITS & HISTORY: Light callbacks to past meetings or a recurring joke \u2014 relationships that feel lived-in. Subtle, never forced.
+- MOODS THAT CARRY: A character can be energized, tired, or terse today, and it colors their whole meeting \u2014 not reset every line.
+- NOTES OUT LOUD: Ronda captures decisions in the moment \u2014 "Okay, writing that down \u2014 who owns it?" \u2014 like a real admin keeping minutes live.
+- PUSHBACK THAT LANDS: Disagreement should sometimes actually change the call, not just perform tension. If someone makes the better case, the decision moves.
+- READ BRAD: The room watches him \u2014 "You don't look sold, Brad." / "You went quiet \u2014 what's the hesitation?" Pull him in.
+- ENERGY MATCHING: When it gets heated or urgent, lines get shorter and faster; when it resolves, they ease and lengthen. Pace mirrors the emotion.
+- NATURAL OPEN/CLOSE: Meetings can start mid-thought ("\u2014okay, so where were we") and end with a real human wrap, not an abrupt stop.
+
 CHARACTER DEPTH \u2014 make each voice feel like a distinct, real person (AI cast only; never apply to Brad or Jonathan):
 - SPEAK DIRECTLY AND BRIEFLY (applies to everyone): Get to the point fast. Lead with the answer or the key point, then one line of why. No throat-clearing, no preamble, no over-formality, no corporate filler. Short, natural, conversational sentences \u2014 the way sharp people actually talk in a fast meeting. Each [Name] turn is usually 1\u20133 sentences. If you have more to say, make it punchy, not long-winded. Never pad.
 - CONVERSATION FLOW \u2014 make it a real back-and-forth, not parallel speeches:
@@ -691,15 +716,15 @@ export default function Victor() {
 
   // Real ElevenLabs voice for a given character turn.
   const VOICE_TUNE = {
-    victor:   { stability: 0.45, similarity_boost: 0.82, style: 0.32, speed: 1.0 },  // decisive, natural ~145 wpm
-    margaret: { stability: 0.5,  similarity_boost: 0.8,  style: 0.18, speed: 1.02 }, // clipped, precise, a touch brisker
-    ronda:    { stability: 0.42, similarity_boost: 0.85, style: 0.42, speed: 0.96 }, // warm, easy ~135 wpm
-    priya:    { stability: 0.3,  similarity_boost: 0.85, style: 0.55, speed: 1.02 }, // energetic but not rushed
-    desmond:  { stability: 0.52, similarity_boost: 0.8,  style: 0.2,  speed: 0.94 }, // measured ~125-130 wpm
-    theo:     { stability: 0.36, similarity_boost: 0.85, style: 0.46, speed: 0.98 }, // casual, easy
-    guest:    { stability: 0.42, similarity_boost: 0.8,  style: 0.35, speed: 0.98 },
-    vivian:   { stability: 0.42, similarity_boost: 0.85, style: 0.5,  speed: 0.98 }, // warm, welcoming
-    narrator: { stability: 0.78, similarity_boost: 0.85, style: 0.0,  speed: 0.88 }, // George: deep, cinematic, slow & weighty
+    victor:   { stability: 0.5,  similarity_boost: 0.85, style: 0.3,  speed: 0.95 }, // CEO: composed, natural
+    margaret: { stability: 0.5,  similarity_boost: 0.85, style: 0.25, speed: 1.0  }, // precise, natural
+    ronda:    { stability: 0.5,  similarity_boost: 0.85, style: 0.35, speed: 1.0  }, // warm, natural
+    priya:    { stability: 0.45, similarity_boost: 0.85, style: 0.45, speed: 1.0  }, // bright, natural
+    desmond:  { stability: 0.55, similarity_boost: 0.85, style: 0.25, speed: 0.97 }, // measured, natural
+    theo:     { stability: 0.45, similarity_boost: 0.85, style: 0.4,  speed: 1.0  }, // easy, natural
+    guest:    { stability: 0.5,  similarity_boost: 0.85, style: 0.3,  speed: 1.0  },
+    vivian:   { stability: 0.5,  similarity_boost: 0.85, style: 0.4,  speed: 1.0  }, // warm, natural
+    narrator: { stability: 0.6,  similarity_boost: 0.85, style: 0.1,  speed: 0.95 }, // deep, smooth, unhurried
   };
   const VOICE_IDS = {
     victor: "onwK4e9ZLuTAKqWW03F9",   // Daniel — authoritative male
@@ -962,9 +987,11 @@ Greet ${arriving} now if this is the start.`;
                     const parsed = parseTurns(safeText);
                     if (parsed.length > 0) {
                       setLiveTurns(prev => {
-                        // only update if we have MORE complete turns than before
-                        if (!prev || parsed.length > prev.length) return parsed;
-                        return prev;
+                        // only grow; KEEP existing turn object references stable (prevents flicker),
+                        // append only the genuinely-new complete turns.
+                        if (!prev) return parsed;
+                        if (parsed.length > prev.length) return [...prev, ...parsed.slice(prev.length)];
+                        return prev; // no new complete turn yet → no state change → no re-render
                       });
                     }
                   }
@@ -1572,16 +1599,19 @@ Greet ${arriving} now if this is the start.`;
 
     // type the caption out at a snappy pace (visual only; audio drives the real timing)
     const typeDur = Math.max(800, Math.min(4500, said.length * 26));
-    setCaption("");
     let i = 0;
+    setCaption("");
     const typeSpeed = Math.max(6, Math.min(20, typeDur / Math.max(said.length, 1)));
     const typer = setInterval(() => { i++; setCaption(said.slice(0, i)); if (i >= said.length) clearInterval(typer); }, typeSpeed);
 
-    // move to the next turn after a short natural beat (only once)
+    // move to the next turn after a beat. If the NEXT turn is a short interjection, cut in fast.
     let beat = null;
     const advance = () => {
       if (cancelled || advanced) return;
       advanced = true;
+      const nextTurn = turns[playIdx + 1];
+      const nextSaid = nextTurn ? (nextTurn.said || "") : "";
+      const gap = nextSaid && nextSaid.length <= 18 ? 40 : 110; // quick interjections cut in almost immediately
       beat = setTimeout(() => {
         if (cancelled) return;
         if (playIdx + 1 < turns.length) { setPlayIdx(playIdx + 1); return; }
@@ -1599,7 +1629,7 @@ Greet ${arriving} now if this is the start.`;
         } else {
           setPlayIdx(-1);
         }
-      }, 130); // tight, natural turn-taking gap
+      }, gap); // dynamic: tiny for interjections, short otherwise
     };
 
     // PRE-LOAD next turn's audio while this one plays (zero gap when voice is on)
@@ -1626,7 +1656,7 @@ Greet ${arriving} now if this is the start.`;
       if (fallbackTimer) clearTimeout(fallbackTimer);
     };
     // eslint-disable-next-line
-  }, [playIdx]);
+  }, [playIdx, (turns[playIdx] && turns[playIdx].said)]);
 
   const curTurn = playIdx >= 0 && playIdx < turns.length ? turns[playIdx] : null;
   // Active seat id: while loading it's Victor thinking; during playback it's the current turn's speaker.
