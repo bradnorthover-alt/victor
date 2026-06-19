@@ -925,13 +925,13 @@ export default function Victor() {
   const NAME_TO_SEAT = { victor: "victor", margaret: "cfo", ronda: "secretary", priya: "marketing", desmond: "legal", theo: "product", guest: "guest" };
   // ElevenLabs preset voice IDs per character (public voices, free-tier friendly)
   const VOICE_IDS = {
-    victor: "onwK4e9ZLuTAKqWW03F9",   // Daniel — authoritative male (working)
-    margaret: "XB0fDUnXU5powFXDhCwa", // Charlotte — crisp female (working)
-    ronda: "pFZP5JQG7iQjIQuC4Bku",    // Lily — warm female (working)
-    priya: "21m00Tcm4TlvDq8ikWAM",    // Rachel — clear female (default, reliable)
-    desmond: "pNInz6obpgDQGcFmaJgB",  // Adam — deep male (default, reliable)
-    theo: "TxGEqnHWrfWFTfGW9XjX",     // Josh — younger male (default, reliable)
-    guest: "VR6AewLTigWG4xSOukaG",    // Arnold — neutral male (default, reliable)
+    victor: "onwK4e9ZLuTAKqWW03F9",   // Daniel — authoritative male
+    margaret: "XB0fDUnXU5powFXDhCwa", // Charlotte — crisp female
+    ronda: "pFZP5JQG7iQjIQuC4Bku",    // Lily — warm female
+    priya: "Xb7hH8MSUJpSbSDYk0k2",    // Alice — bright, expressive female (premium)
+    desmond: "nPczCjzI2devNBz1zQrb",  // Brian — measured, resonant male (premium)
+    theo: "bIHbv24MWmeRgasZH58o",     // Will — casual, friendly male (premium)
+    guest: "cjVigY5qzO86Huf0OWal",    // Eric — neutral male (premium)
   };
 
   function stripStage(s) {
